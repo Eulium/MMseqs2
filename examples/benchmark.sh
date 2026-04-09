@@ -28,10 +28,6 @@ end_ns=$(date +%s%N)
 elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
 echo "Write to parquet time = $elapsed_ms ms" >&2
 
-# Check if files differ
-python compare_columns.py ${resultDir}/parquet ${resultDir}/test.tsv
-
-
 # Simple DuckDB load
 duckdb "benchmark.duck" <<EOF
 
@@ -55,4 +51,8 @@ WHERE
     AND
     pident BETWEEN 25.4 AND 95.00;
 EOF
+
+# Check if files differ
+python compare_columns.py ${resultDir}/parquet ${resultDir}/test.tsv
+
 
