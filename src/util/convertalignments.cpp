@@ -151,7 +151,7 @@ int convertalignments(int argc, const char **argv, const Command &command) {
     const bool sameDB = par.db1.compare(par.db2) == 0 ? true : false;
     int format = par.formatAlignmentMode;
     bool addColumnHeaders = false;
-    bool isParquet;
+    bool isParquet = false;
     if (format == Parameters::FORMAT_ALIGNMENT_BLAST_TAB_AS_PARQUET){
         isParquet = true;
         format = Parameters::FORMAT_ALIGNMENT_BLAST_TAB;

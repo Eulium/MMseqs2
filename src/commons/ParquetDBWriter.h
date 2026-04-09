@@ -4,11 +4,9 @@
 #include "Parameters.h"
 #include "TranslateNucl.h"
 #include "Orf.h"
-#include <variant> //new
 #include <carquet/include/carquet/carquet.h>
 
 typedef std::pair<void*,carquet_physical_type> Record;
-using CellValue = std::variant<std::string, double, int32_t, float>;
 
 class ParquetDBWriter : public MemoryTracker{
 public:
@@ -16,7 +14,10 @@ public:
     void init(const char* resultFile,const std::vector<int>& outcodes);
     ~ParquetDBWriter();
     void checkStatus(const std::string message);
-    void writeCell(const CellValue& record_value, const int record_num);
+    void writeCell(const std::string& record_value, const int record_num); 
+    void writeCell(const double& record_value, const int record_num); 
+    void writeCell(const int& record_value, const int record_num); 
+    void writeCell(const float& record_value, const int record_num);
     void addSeqBasedOnAln(const int record_num, const char *seq, unsigned int offset,
                         const std::string &bt, bool reverse, bool isReverseStrand,
                         bool translateSequence, const TranslateNucl &translateNucl);

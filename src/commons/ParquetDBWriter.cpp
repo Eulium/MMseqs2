@@ -6,7 +6,7 @@
 #include "ParquetDBWriter.h"
 
 
-#include <variant> //new
+//#include <variant> //new
 #include <carquet/include/carquet/carquet.h>
 #define ZSTD_STATIC_LINKING_ONLY
 #include <zstd.h>
@@ -23,7 +23,8 @@ struct StringColumn {
     void finalize(){
         values.reserve(storage.size());
         for (std::string& entry : storage){
-            values.push_back({reinterpret_cast<uint8_t*>(entry.data()),static_cast<int32_t>(entry.size())});
+
+            values.push_back(carquet_byte_array_t{reinterpret_cast<uint8_t*>(const_cast<char*>(entry.data())),static_cast<int32_t>(entry.size())});
         }
     }
 
@@ -121,287 +122,287 @@ void ParquetDBWriter::outcodeToField(const int outcode){
         case Parameters::OUTFMT_QUERY:{
             status = carquet_schema_add_column(schema, "query", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* query = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(query,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(query,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TARGET:{
             status =carquet_schema_add_column(schema, "target", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* target = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(target,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(target,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_EVALUE:{
             status =carquet_schema_add_column(schema, "evalue", CARQUET_PHYSICAL_DOUBLE, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* evalue = typToPointer(CARQUET_PHYSICAL_DOUBLE);
-            record_batch[record_counter] = std::pair(evalue,CARQUET_PHYSICAL_DOUBLE);
+            record_batch[record_counter] = Record(evalue,CARQUET_PHYSICAL_DOUBLE);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_GAPOPEN:{
             status =carquet_schema_add_column(schema, "gapopen", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* gapopen = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(gapopen,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(gapopen,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_FIDENT:{
             status =carquet_schema_add_column(schema, "fident", CARQUET_PHYSICAL_FLOAT, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* findent = typToPointer(CARQUET_PHYSICAL_FLOAT);
-            record_batch[record_counter] = std::pair(findent,CARQUET_PHYSICAL_FLOAT);
+            record_batch[record_counter] = Record(findent,CARQUET_PHYSICAL_FLOAT);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_PIDENT:{
             status =carquet_schema_add_column(schema, "pident", CARQUET_PHYSICAL_FLOAT, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* pindent = typToPointer(CARQUET_PHYSICAL_FLOAT);
-            record_batch[record_counter] = std::pair(pindent,CARQUET_PHYSICAL_FLOAT);
+            record_batch[record_counter] = Record(pindent,CARQUET_PHYSICAL_FLOAT);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_NIDENT:{
             status =carquet_schema_add_column(schema, "nident", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* nident = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(nident,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(nident,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QSTART:{
             status =carquet_schema_add_column(schema, "Qstart", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qstart = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qstart,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qstart,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QEND:{
             status =carquet_schema_add_column(schema, "qend", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qend = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qend,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qend,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QLEN:{
             status =carquet_schema_add_column(schema, "qlen", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qlen = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qlen,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qlen,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TSTART:{
             status = carquet_schema_add_column(schema, "tstart", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tstart = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(tstart,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(tstart,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TEND:{
             status = carquet_schema_add_column(schema, "tend", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tend = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(tend,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(tend,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TLEN:{
             status = carquet_schema_add_column(schema, "tlen", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tlen = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(tlen,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(tlen,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_ALNLEN:{
             status = carquet_schema_add_column(schema, "alnlen", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* alnlen = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(alnlen,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(alnlen,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_RAW:{
             status = carquet_schema_add_column(schema, "raw", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* raw = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(raw,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(raw,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_BITS:{
             status = carquet_schema_add_column(schema, "score", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* score = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(score,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(score,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_CIGAR:{
             status = carquet_schema_add_column(schema, "cigar", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* cigar = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(cigar,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(cigar,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QSEQ:{
             status = carquet_schema_add_column(schema, "qseq", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qseq = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(qseq,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(qseq,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TSEQ:{
             status = carquet_schema_add_column(schema, "tseq", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tseq = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(tseq,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(tseq,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QHEADER:{
             status = carquet_schema_add_column(schema, "qheader", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qheader = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(qheader,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(qheader,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_THEADER:{
             status = carquet_schema_add_column(schema, "theader", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* theader = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(theader,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(theader,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QALN:{
             status = carquet_schema_add_column(schema, "qaln", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qaln = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(qaln,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(qaln,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TALN:{
             status = carquet_schema_add_column(schema, "taln", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* taln = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(taln,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(taln,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_MISMATCH:{
             status = carquet_schema_add_column(schema, "mismatch", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* mismatch = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(mismatch,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(mismatch,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QCOV:{
             status = carquet_schema_add_column(schema, "qcov", CARQUET_PHYSICAL_FLOAT, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qcov = typToPointer(CARQUET_PHYSICAL_FLOAT);
-            record_batch[record_counter] = std::pair(qcov,CARQUET_PHYSICAL_FLOAT);
+            record_batch[record_counter] = Record(qcov,CARQUET_PHYSICAL_FLOAT);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TCOV:{
             status = carquet_schema_add_column(schema, "tcov", CARQUET_PHYSICAL_FLOAT, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tcov = typToPointer(CARQUET_PHYSICAL_FLOAT);
-            record_batch[record_counter] = std::pair(tcov,CARQUET_PHYSICAL_FLOAT);
+            record_batch[record_counter] = Record(tcov,CARQUET_PHYSICAL_FLOAT);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QSET:{
             status = carquet_schema_add_column(schema, "qset", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qset = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(qset,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(qset,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QSETID:{
             status = carquet_schema_add_column(schema, "qsetid", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qsetid = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qsetid,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qsetid,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TSET:{
             status = carquet_schema_add_column(schema, "tset", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qset = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(qset,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(qset,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TSETID:{
             status = carquet_schema_add_column(schema, "tsetid", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tsetid = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(tsetid,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(tsetid,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TAXID:{
             status = carquet_schema_add_column(schema, "taxid", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* taxid = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(taxid,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(taxid,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TAXNAME:{
             status = carquet_schema_add_column(schema, "taxname", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* taxname = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(taxname,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(taxname,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TAXLIN:{
             status = carquet_schema_add_column(schema, "taxlin", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* taxlin = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(taxlin,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(taxlin,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_EMPTY:{
             status = carquet_schema_add_column(schema, "empty", CARQUET_PHYSICAL_BYTE_ARRAY, &string_type, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* empty = typToPointer(CARQUET_PHYSICAL_BYTE_ARRAY);
-            record_batch[record_counter] = std::pair(empty,CARQUET_PHYSICAL_BYTE_ARRAY);
+            record_batch[record_counter] = Record(empty,CARQUET_PHYSICAL_BYTE_ARRAY);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QORFSTART:{
             status = carquet_schema_add_column(schema, "qorfstart", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qorfstart = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qorfstart,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qorfstart,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QORFEND:{
             status = carquet_schema_add_column(schema, "qorfend", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qorfend = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qorfend,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qorfend,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TORFSTART:{
             status = carquet_schema_add_column(schema, "torfstart", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* torfstart = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(torfstart,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(torfstart,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TORFEND:{
             status = carquet_schema_add_column(schema, "torfend", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* torfend = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(torfend,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(torfend,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_PPOS:{
             status = carquet_schema_add_column(schema, "ppos", CARQUET_PHYSICAL_FLOAT, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* ppos = typToPointer(CARQUET_PHYSICAL_FLOAT);
-            record_batch[record_counter] = std::pair(ppos,CARQUET_PHYSICAL_FLOAT);
+            record_batch[record_counter] = Record(ppos,CARQUET_PHYSICAL_FLOAT);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_QFRAME:{
             status = carquet_schema_add_column(schema, "qframe", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* qframe = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(qframe,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(qframe,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
         case Parameters::OUTFMT_TFRAME:{
             status = carquet_schema_add_column(schema, "tframe", CARQUET_PHYSICAL_INT32, NULL, CARQUET_REPETITION_REQUIRED, 0, 0);
             void* tframe = typToPointer(CARQUET_PHYSICAL_INT32);
-            record_batch[record_counter] = std::pair(tframe,CARQUET_PHYSICAL_INT32);
+            record_batch[record_counter] = Record(tframe,CARQUET_PHYSICAL_INT32);
             record_counter++;
             break;
         }
@@ -521,37 +522,37 @@ void ParquetDBWriter::freeRecordBatch(){
     }
 }
 
-void ParquetDBWriter::writeCell(const CellValue& record_value, const int record_num){
+
+void ParquetDBWriter::writeCell(const std::string& record_value, const int record_num){
     void* record_pointer = record_batch[record_num].first;
     carquet_physical_type type = record_batch[record_num].second;
-    switch (type){
-        case CARQUET_PHYSICAL_BYTE_ARRAY: {
-            StringColumn* carbyte_pointer_a = reinterpret_cast<StringColumn*>(record_pointer);
-            const std::string& value = std::get<std::string>(record_value);
-            carbyte_pointer_a->add(value);
-            break;
-        }
-        case CARQUET_PHYSICAL_DOUBLE:{
-            std::vector<double>* carbyte_pointer_b = reinterpret_cast<std::vector<double>*>(record_pointer);
-            carbyte_pointer_b->emplace_back(std::get<double>(record_value));
-            break;
-        }
-        case CARQUET_PHYSICAL_INT32:{
-            std::vector<int32_t>* carbyte_pointer_c = reinterpret_cast<std::vector<int32_t>*>(record_pointer);
-            carbyte_pointer_c->emplace_back(std::get<int32_t>(record_value));
-            break;
-        }
-        case CARQUET_PHYSICAL_FLOAT:{
-            std::vector<float>* carbyte_pointer_d = reinterpret_cast<std::vector<float>*>(record_pointer);
-            carbyte_pointer_d->emplace_back(std::get<float>(record_value));
-            break;
-        }
-        default:
-            status = CARQUET_ERROR_INTERNAL;
-            checkStatus("writeCell unkown field type for record:"+std::to_string(record_num));
-            break;
-    }
+    StringColumn* carbyte_pointer_a = reinterpret_cast<StringColumn*>(record_pointer);
+    const std::string& value = record_value;
+    carbyte_pointer_a->add(value);
 }
+
+void ParquetDBWriter::writeCell(const double& record_value, const int record_num){
+    void* record_pointer = record_batch[record_num].first;
+    carquet_physical_type type = record_batch[record_num].second;
+    std::vector<double>* carbyte_pointer_b = reinterpret_cast<std::vector<double>*>(record_pointer);
+    carbyte_pointer_b->emplace_back(record_value);
+}
+
+void ParquetDBWriter::writeCell(const int& record_value, const int record_num){
+    void* record_pointer = record_batch[record_num].first;
+    carquet_physical_type type = record_batch[record_num].second;
+    std::vector<int32_t>* carbyte_pointer_c = reinterpret_cast<std::vector<int32_t>*>(record_pointer);
+    carbyte_pointer_c->emplace_back(record_value);
+}
+
+void ParquetDBWriter::writeCell(const float& record_value, const int record_num){
+    void* record_pointer = record_batch[record_num].first;
+    carquet_physical_type type = record_batch[record_num].second;
+    std::vector<float>* carbyte_pointer_d = reinterpret_cast<std::vector<float>*>(record_pointer);
+    carbyte_pointer_d->emplace_back(record_value);
+}
+
+
 
 void ParquetDBWriter::writeColumn(int column_number){
     
