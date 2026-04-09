@@ -1,0 +1,188 @@
+/**
+ * @file fuzz_reader.c
+ * @brief Fuzz target for carquet Parquet reader
+ *
+ * Tests the full Parquet file reader with arbitrary input via buffer API.
+ * Exercises: schema inspection, batch reader, low-level column reader,
+ * statistics access, and type name utilities.
+ */
+
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
+#include <stdlib.h>
+#include <carquet/carquet.h>
+
+int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+    if (size < 12) return 0;
+    (void)carquet_init();
+
+    carquet_error_t err = CARQUET_ERROR_INIT;
+
+    carquet_reader_t* reader = carquet_reader_open_buffer(data, size, NULL, &err);
+    if (!reader) return 0;
+
+    int64_t num_rows = carquet_reader_num_rows(reader);
+    int32_t num_cols = carquet_reader_num_columns(reader);
+    int32_t num_row_groups = carquet_reader_num_row_groups(reader);
+    (void)num_rows;
+
+    /* Schema inspection */
+    const carquet_schema_t* schema = carquet_reader_schema(reader);
+    if (schema) {
+        int32_t num_elements = carquet_schema_num_elements(schema);
+        for (int32_t i = 0; i < num_elements && i < 100; i++) {
+            const carquet_schema_node_t* node = carquet_schema_get_element(schema, i);
+            if (node) {
+                const char* name = carquet_schema_node_name(node);
+                carquet_physical_type_t ptype = carquet_schema_node_physical_type(node);
+                /* Exercise type name utilities */
+                (void)carquet_physical_type_name(ptype);
+                (void)name;
+            }
+        }
+    }
+
+    /* Batch reader API */
+    carquet_batch_reader_config_t config;
+    carquet_batch_reader_config_init(&config);
+    config.batch_size = 1000;
+
+    carquet_batch_reader_t* batch_reader = carquet_batch_reader_create(reader, &config, &err);
+    if (batch_reader) {
+        carquet_row_batch_t* batch = NULL;
+        int batch_count = 0;
+        while (batch_count < 10 &&
+               carquet_batch_reader_next(batch_reader, &batch) == CARQUET_OK && batch) {
+            for (int32_t col = 0; col < num_cols && col < 100; col++) {
+                const void* data_ptr;
+                const uint8_t* nulls;
+                int64_t count;
+                (void)carquet_row_batch_column(batch, col, &data_ptr, &nulls, &count);
+            }
+            carquet_row_batch_free(batch);
+            batch = NULL;
+            batch_count++;
+        }
+        carquet_batch_reader_free(batch_reader);
+    }
+
+    /* Low-level column reader API */
+    for (int32_t rg = 0; rg < num_row_groups && rg < 5; rg++) {
+        carquet_row_group_metadata_t rg_meta;
+        if (carquet_reader_row_group_metadata(reader, rg, &rg_meta) != CARQUET_OK)
+            continue;
+
+        int64_t rg_rows = rg_meta.num_rows;
+        if (rg_rows <= 0 || rg_rows > 10000) rg_rows = 10000;
+
+        for (int32_t col = 0; col < num_cols && col < 50; col++) {
+            carquet_column_reader_t* col_reader =
+                carquet_reader_get_column(reader, rg, col, &err);
+            if (!col_reader) continue;
+
+            void* values = malloc((size_t)rg_rows * 16);
+            int16_t* def_levels = malloc((size_t)rg_rows * sizeof(int16_t));
+            int16_t* rep_levels = malloc((size_t)rg_rows * sizeof(int16_t));
+
+            if (values && def_levels && rep_levels) {
+                int64_t values_read = carquet_column_read_batch(
+                    col_reader, values, rg_rows, def_levels, rep_levels);
+                (void)values_read;
+            }
+
+            free(values);
+            free(def_levels);
+            free(rep_levels);
+            carquet_column_reader_free(col_reader);
+        }
+    }
+
+    /* Exercise encoding/compression name utilities */
+    (void)carquet_encoding_name(CARQUET_ENCODING_PLAIN);
+    (void)carquet_encoding_name(CARQUET_ENCODING_RLE_DICTIONARY);
+    (void)carquet_compression_name(CARQUET_COMPRESSION_SNAPPY);
+    (void)carquet_compression_name(CARQUET_COMPRESSION_ZSTD);
+    (void)carquet_status_string(CARQUET_OK);
+    (void)carquet_status_string(CARQUET_ERROR_DECODE);
+
+    /* Exercise v0.4.0 APIs: bloom filter, page index, kv metadata,
+     * column chunk metadata.  These parse Thrift from untrusted file
+     * offsets, so they are important fuzzing targets. */
+    for (int32_t rg = 0; rg < num_row_groups && rg < 3; rg++) {
+        for (int32_t col = 0; col < num_cols && col < 10; col++) {
+            /* Bloom filter — parses Thrift BloomFilterHeader */
+            carquet_bloom_filter_t* bf =
+                carquet_reader_get_bloom_filter(reader, rg, col, NULL);
+            if (bf) {
+                (void)carquet_bloom_filter_size(bf);
+                (void)carquet_bloom_filter_check_i64(bf, 42);
+                (void)carquet_bloom_filter_check_i32(bf, 0);
+                (void)carquet_bloom_filter_check_double(bf, 3.14);
+                (void)carquet_bloom_filter_check_bytes(bf,
+                    (const uint8_t*)"test", 4);
+                carquet_bloom_filter_destroy(bf);
+            }
+
+            /* Column index — parses Thrift ColumnIndex */
+            carquet_column_index_t* ci =
+                carquet_reader_get_column_index(reader, rg, col, NULL);
+            if (ci) {
+                int32_t np = carquet_column_index_num_pages(ci);
+                (void)carquet_column_index_boundary_order(ci);
+                for (int32_t p = 0; p < np && p < 5; p++) {
+                    carquet_page_stats_t ps;
+                    carquet_column_index_get_page_stats(ci, p, &ps);
+                    (void)ps.min_value;
+                    (void)ps.null_count;
+                }
+                carquet_column_index_free(ci);
+            }
+
+            /* Offset index — parses Thrift OffsetIndex */
+            carquet_offset_index_t* oi =
+                carquet_reader_get_offset_index(reader, rg, col, NULL);
+            if (oi) {
+                int32_t np = carquet_offset_index_num_pages(oi);
+                for (int32_t p = 0; p < np && p < 5; p++) {
+                    carquet_page_location_t loc;
+                    carquet_offset_index_get_page_location(oi, p, &loc);
+                    (void)loc.offset;
+                }
+                carquet_offset_index_free(oi);
+            }
+
+            /* Column chunk metadata */
+            carquet_column_chunk_metadata_t ccm;
+            (void)carquet_reader_column_chunk_metadata(reader, rg, col, &ccm);
+        }
+    }
+
+    /* Key-value metadata accessors */
+    int32_t nkv = carquet_reader_num_metadata(reader);
+    for (int32_t i = 0; i < nkv && i < 50; i++) {
+        const char *k, *v;
+        (void)carquet_reader_get_metadata(reader, i, &k, &v);
+    }
+    (void)carquet_reader_find_metadata(reader, "pandas");
+    (void)carquet_reader_find_metadata(reader, "ARROW:schema");
+
+    carquet_reader_close(reader);
+    return 0;
+}
+
+#ifdef AFL_MAIN
+#include <stdio.h>
+#include <sys/stat.h>
+int main(int argc, char** argv) {
+    if (argc != 2) { fprintf(stderr, "Usage: %s <input_file>\n", argv[0]); return 1; }
+    FILE* f = fopen(argv[1], "rb");
+    if (!f) { perror("fopen"); return 1; }
+    struct stat st; fstat(fileno(f), &st);
+    uint8_t* d = malloc((size_t)st.st_size);
+    if (!d) { fclose(f); return 1; }
+    fread(d, 1, (size_t)st.st_size, f); fclose(f);
+    int r = LLVMFuzzerTestOneInput(d, (size_t)st.st_size);
+    free(d); return r;
+}
+#endif
