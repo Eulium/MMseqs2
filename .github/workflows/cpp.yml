@@ -1,0 +1,104 @@
+
+name: Test
+on: [push, pull_request]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: OS ${{ matrix.os }} with BUILD_SHARED_LIBS=${{matrix.shared}}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest,  ubuntu-24.04-arm ]
+        shared: [ON, OFF]
+
+    steps:
+     - uses: actions/checkout@v4
+     - uses: ilammy/msvc-dev-cmd@v1
+       if: matrix.os == 'windows-latest'
+     - name: Support longpaths
+       run: git config --system core.longpaths true
+       if: matrix.os == 'windows-latest'
+     - uses: mamba-org/setup-micromamba@v2
+       with:
+           init-shell: bash
+           environment-file: ci/environment.yml
+           environment-name: "build"
+           cache-environment: true
+           cache-downloads: true
+
+     - name: Setup
+       shell: bash -l {0}
+       run: |
+           mkdir build
+
+     - name: CMake
+       shell: bash -l {0}
+       env:
+        BUILD_SHARED_LIBS: ${{ matrix.shared }}
+
+       run: |
+
+        if [ "$RUNNER_OS" == "Windows" ]; then
+        export CC=cl.exe
+        export CXX=cl.exe
+        fi
+
+        cmake   -G "Ninja"  \
+              -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+              -DCARQUET_BUILD_SHARED=$BUILD_SHARED_LIBS \
+              -DCARQUET_BUILD_TESTS=ON \
+              -DCMAKE_INSTALL_PREFIX=${CONDA_PREFIX} \
+              ..
+
+
+       working-directory: ./build
+
+     - name: Compile
+       shell: bash -l {0}
+       run: |
+          ninja
+       working-directory: ./build
+
+     - name: Test
+       shell: bash -l {0}
+       run: |
+          ctest -VV --rerun-failed --output-on-failure
+       working-directory: ./build
+
+  redhat-build:
+    name: Rocky Linux 9
+    runs-on: ubuntu-latest
+    container:
+      image: rockylinux:9
+
+    steps:
+     - name: Install build dependencies
+       run: |
+          dnf install -y \
+            gcc gcc-c++ \
+            cmake make git \
+            pkgconf-pkg-config \
+            zlib-devel libzstd-devel lz4-devel
+
+     - uses: actions/checkout@v4
+
+     - name: Configure
+       run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCARQUET_BUILD_TESTS=ON
+
+     - name: Compile
+       run: |
+          cmake --build build --parallel
+
+     - name: Test
+       run: |
+          ctest --test-dir build -VV --rerun-failed --output-on-failure
+
+
+
