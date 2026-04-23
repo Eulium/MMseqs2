@@ -73,13 +73,14 @@ void ParquetDBWriter::init(const char* resultFile,const std::vector<int>& outcod
         checkStatus("Adding column to schema failed");
     }
 
+    carquet_writer_options_t opts;
     carquet_writer_options_init(&opts);
-    opts.compression = CARQUET_COMPRESSION_UNCOMPRESSED;
-    //opts.compression_level = 6;
+    opts.compression = CARQUET_COMPRESSION_LZ4_RAW;
+    // opts.compression_level = 6;
     opts.row_group_size = 128 * 1024 * 1024;
     opts.page_size = 1024 * 1024;
     opts.write_statistics = true;
-    opts.write_crc = false;
+    opts.write_crc = true;
     opts.write_page_index = true;
     opts.write_bloom_filters = true;
     opts.dictionary_encoding = CARQUET_ENCODING_PLAIN; // might want to change, depends on performance
@@ -563,7 +564,7 @@ void ParquetDBWriter::writeColumn(int column_number){
         case CARQUET_PHYSICAL_BYTE_ARRAY: {
             StringColumn* carbyte_pointer_a = reinterpret_cast<StringColumn*>(record_pointer);
             carbyte_pointer_a->finalize(); 
-            status = carquet_writer_write_batch(writer, column_number, carbyte_pointer_a->values.data(),static_cast<int64_t>(carbyte_pointer_a->values.size()), 0, 0);
+            status = carquet_writer_write_batch(writer, column_number, carbyte_pointer_a->values.data(),static_cast<int64_t>(carbyte_pointer_a->values.size()), NULL, NULL);
             checkStatus("Column write" + std::to_string(column_number) + "error");
             break;
         }
