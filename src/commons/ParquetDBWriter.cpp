@@ -75,8 +75,8 @@ void ParquetDBWriter::init(const char* resultFile,const std::vector<int>& outcod
 
     carquet_writer_options_t opts;
     carquet_writer_options_init(&opts);
-    opts.compression = CARQUET_COMPRESSION_LZ4_RAW;
-    // opts.compression_level = 6;
+    opts.compression = CARQUET_COMPRESSION_ZSTD;
+    opts.compression_level = 6;
     opts.row_group_size = 128 * 1024 * 1024;
     opts.page_size = 1024 * 1024;
     opts.write_statistics = true;
@@ -93,6 +93,10 @@ void ParquetDBWriter::init(const char* resultFile,const std::vector<int>& outcod
         status = CARQUET_ERROR_INTERNAL;
         checkStatus("Writer initialisation error");
     } else {
+        for(int i=0; i < outcodes.size(); i++){
+           status = carquet_writer_set_column_encoding(writer, i, CARQUET_ENCODING_PLAIN);
+           checkStatus("Column encoding overwrite");
+        }
         writer_close_status = CARQUET_OK;
     }
     carquet_schema_free(schema); // writer copies schema, can be freed early
