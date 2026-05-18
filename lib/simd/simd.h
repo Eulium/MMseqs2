@@ -138,57 +138,57 @@ inline __m512i simdi8_shift_left(__m512i a) {
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {
     __mmask16 mask = _mm512_cmp_epi32_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFFFFFF));
+    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFF));
 }
 
 inline __m512i simdi16_gt_avx512(__m512i a, __m512i b) {
     __mmask32 mask = _mm512_cmp_epi16_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFFFF));
+    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFF));
 }
 
 inline __m512i simdi8_gt_avx512(__m512i a, __m512i b) {
     __mmask64 mask = _mm512_cmp_epi8_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xFF));
+    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xF));
 }
 
 inline __m512i simdi32_eq_avx512(__m512i a, __m512i b) {
     __mmask16 mask = _mm512_cmp_epi32_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFFFFFF));
+    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFF));
 }
 
 inline __m512i simdi16_eq_avx512(__m512i a, __m512i b) {
     __mmask32 mask = _mm512_cmp_epi16_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFFFF));
+    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFF));
 }
 
 inline __m512i simdi8_eq_avx512(__m512i a, __m512i b) {
     __mmask64 mask = _mm512_cmp_epi8_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xFF));
+    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xF));
 }
 
 inline __m512 simdf32_gt_avx512(__m512 a, __m512 b) {
     __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x06);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFFFFFF)));
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
 }
 
 inline __m512d simdf64_gt_avx512(__m512d a, __m512d b) {
     __mmask8 mask = _mm512_cmp_pd_mask(a, b, 0x06);
-    return _mm512_mask_mov_pd(_mm512_setzero_ps(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(0xFFFFFFFF)));
+    return _mm512_mask_mov_pd(_mm512_setzero_pd(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(0xFFFF)));
 }
 
 inline __m512 simdf32_eq_avx512(__m512 a, __m512 b) {
     __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x16);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFFFFFF)));
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
 }
 
 inline __m512 simdf32_le_avx512(__m512 a, __m512 b) {
     __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x02);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFFFFFF)));
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
 }
 
 inline __m512 simdf32_cmp_avx512(__m512 a, __m512 b, const int imm8) {
     __mmask16 mask = _mm512_cmp_ps_mask(a, b, imm8);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFFFFFF)));
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
 }
 
 // AI Idea to get around z in _mm512_mask_blend_ps(z,x,y) beeing __mmask16 
@@ -270,7 +270,7 @@ typedef __m512  simd_float;
 #define simdf32_eq(x,y)     simdf32_eq_avx512(x,y)
 #define simdf32_lt(x,y)     simdf32_gt_avx512(y,x)
 #define simdf32_le(x,y)     simdf32_le_avx512(x,y)
-#define simdf32_cmp(x,y,z)  simdf32_cmp_avx512(x,y) //_mm512_mask_blend_ps(_mm512_cmp_ps_mask(x, y, z), x, y)
+#define simdf32_cmp(x,y,z)  _mm512_mask_mov_ps(_mm512_setzero_ps(), _mm512_cmp_ps_mask(x, y, z), _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)))
 #define simdf32_or(x,y)     _mm512_or_ps(x,y)
 #define simdf32_and(x,y)    _mm512_and_ps(x,y)
 #define simdf32_andnot(x,y) _mm512_andnot_ps(x,y)

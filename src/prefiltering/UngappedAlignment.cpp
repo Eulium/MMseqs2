@@ -200,7 +200,7 @@ void UngappedAlignment::unrolledDiagonalScoring(const char * profile,
         score = simdi32_max(score, zero);
         maxVec = simdui8_max(maxVec, score);
     }
-#ifdef AVX2
+#if defined(AVX2)
     for(unsigned int pos = seqLen[3]; pos < seqLen[4]; pos++){
         const char * profileColumn = (profile + pos * T);
         int subScore4 =  profileColumn[dbSeq[4][pos]];
@@ -239,8 +239,7 @@ void UngappedAlignment::unrolledDiagonalScoring(const char * profile,
         score = simdi32_max(score, zero);
         maxVec = simdui8_max(maxVec, score);
     }
-#endif
-#ifdef AVX512
+#elif defined(AVX512)
     for(unsigned int pos = seqLen[3]; pos < seqLen[4]; pos++){
         const char * profileColumn = (profile + pos * T);
         int subScore4 =  profileColumn[dbSeq[4][pos]];
