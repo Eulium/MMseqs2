@@ -128,67 +128,86 @@ inline float simdf32_hadd(const __m512 buffer) {
     return _mm512_cvtss_f32(max4);
 }
 
+// template  <unsigned int N>
+// inline __m512i simdi8_shift_left(__m512i a) {
+//     // only works for N <= 16
+//     __m512i mask = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(1, 0, 3, 2));
+//     __m512i mask2 = _mm512_maskz_mov_epi32(0xFF00,mask);
+//     return _mm512_alignr_epi8(a,mask2,16-N);
+// }
+
+template<int N>
+inline __m512i simdi8_shift_right(__m512i a) { 
+    // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
+    __m512i carry = _mm512_setzero_si512();
+    return _mm512_alignr_epi32(carry, a, N);
+}
+
 template  <unsigned int N>
 inline __m512i simdi8_shift_left(__m512i a) {
-    // only works for N <= 16
-    __m512i mask = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(1, 0, 3, 2));
-    __m512i mask2 = _mm512_maskz_mov_epi32(0xFF00,mask);
-    return _mm512_alignr_epi8(a,mask2,16-N);
+    // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
+    __m512i carry = _mm512_setzero_si512();
+    return _mm512_alignr_epi32(a, carry, (8-N));
 }
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {
-    __mmask16 mask = _mm512_cmp_epi32_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFF));
+    __mmask16 mask = _mm512_cmp_epi32_mask(a, b, _MM_CMPINT_NLE);
+    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(-1));
 }
 
 inline __m512i simdi16_gt_avx512(__m512i a, __m512i b) {
-    __mmask32 mask = _mm512_cmp_epi16_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFF));
+    __mmask32 mask = _mm512_cmp_epi16_mask(a, b, _MM_CMPINT_NLE);
+    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(-1));
 }
 
 inline __m512i simdi8_gt_avx512(__m512i a, __m512i b) {
-    __mmask64 mask = _mm512_cmp_epi8_mask(a, b, 0x06);
-    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xF));
+    __mmask64 mask = _mm512_cmp_epi8_mask(_MM_CMPINT_NLE);
+    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(-1));
 }
 
 inline __m512i simdi32_eq_avx512(__m512i a, __m512i b) {
-    __mmask16 mask = _mm512_cmp_epi32_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(0xFFFF));
+    __mmask16 mask = _mm512_cmp_epi32_mask(a, b, _MM_CMPINT_EQ);
+    return _mm512_mask_mov_epi32(_mm512_setzero_si512(), mask, _mm512_set1_epi32(-1));
 }
 
 inline __m512i simdi16_eq_avx512(__m512i a, __m512i b) {
-    __mmask32 mask = _mm512_cmp_epi16_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(0xFF));
+    __mmask32 mask = _mm512_cmp_epi16_mask(a, b, _MM_CMPINT_EQ);
+    return _mm512_mask_mov_epi16(_mm512_setzero_si512(), mask, _mm512_set1_epi16(-1));
 }
 
 inline __m512i simdi8_eq_avx512(__m512i a, __m512i b) {
-    __mmask64 mask = _mm512_cmp_epi8_mask(a, b, 0x00);
-    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(0xF));
+    __mmask64 mask = _mm512_cmp_epi8_mask(a, b, _MM_CMPINT_EQ);
+    return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(-1));
 }
 
 inline __m512 simdf32_gt_avx512(__m512 a, __m512 b) {
-    __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x06);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
+    __mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_GT_OS);
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(-1)));
 }
 
 inline __m512d simdf64_gt_avx512(__m512d a, __m512d b) {
-    __mmask8 mask = _mm512_cmp_pd_mask(a, b, 0x06);
-    return _mm512_mask_mov_pd(_mm512_setzero_pd(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(0xFFFF)));
+    __mmask8 mask = _mm512_cmp_pd_mask(a, b, _CMP_GT_OS);
+    return _mm512_mask_mov_pd(_mm512_setzero_pd(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(-1)));
+}
+
+inline __m512d simdf64_lt_avx512(__m512d a, __m512d b) {
+    __mmask8 mask = _mm512_cmp_pd_mask(a, b, _CMP_GT_OS);
+    return _mm512_mask_mov_pd(_mm512_setzero_pd(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(-1)));
 }
 
 inline __m512 simdf32_eq_avx512(__m512 a, __m512 b) {
-    __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x16);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
+    __mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_EQ_OS);
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(-1)));
 }
 
 inline __m512 simdf32_le_avx512(__m512 a, __m512 b) {
-    __mmask16 mask = _mm512_cmp_ps_mask(a, b, 0x02);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
+    __mmask16 mask = _mm512_cmp_ps_mask(a, b, _CMP_LE_OQ);
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(-1)));
 }
 
 inline __m512 simdf32_cmp_avx512(__m512 a, __m512 b, const int imm8) {
     __mmask16 mask = _mm512_cmp_ps_mask(a, b, imm8);
-    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)));
+    return _mm512_mask_mov_ps(_mm512_setzero_ps(), mask, _mm512_castsi512_ps(_mm512_set1_epi32(-1)));
 }
 
 // AI Idea to get around z in _mm512_mask_blend_ps(z,x,y) beeing __mmask16 
@@ -198,7 +217,7 @@ inline __mmask16 simdf32_mask_from_ps_avx512(__m512 m) {
 
 inline bool simd_any_avx512(const __m512i buffer) {
     const uint64_t mask = (uint64_t)_mm512_movepi8_mask(buffer);
-    return (mask != 0xFFFFFFFFFFFFFFFFULL);
+    return (mask != 0);
 }
 
 inline bool simd_eq_all_avx512(const __m512i a, const __m512i b) {
@@ -240,7 +259,7 @@ typedef __m512d simd_double;
 #define simdf64_set(x)      _mm512_set1_pd(x)
 #define simdf64_setzero(x)  _mm512_setzero_pd()
 #define simdf64_gt(x,y)     simdf64_gt_avx512(x,y)
-#define simdf64_lt(x,y)     simdf64_gt_avx512(y,x)
+#define simdf64_lt(x,y)     simdf64_lt_avx512(x,y)
 #define simdf64_or(x,y)     _mm512_or_pd(x,y)
 #define simdf64_and(x,y)    _mm512_and_pd (x,y)
 #define simdf64_andnot(x,y) _mm512_andnot_pd(x,y)
@@ -270,7 +289,7 @@ typedef __m512  simd_float;
 #define simdf32_eq(x,y)     simdf32_eq_avx512(x,y)
 #define simdf32_lt(x,y)     simdf32_gt_avx512(y,x)
 #define simdf32_le(x,y)     simdf32_le_avx512(x,y)
-#define simdf32_cmp(x,y,z)  _mm512_mask_mov_ps(_mm512_setzero_ps(), _mm512_cmp_ps_mask(x, y, z), _mm512_castsi512_ps(_mm512_set1_epi32(0xFFFF)))
+#define simdf32_cmp(x,y,z)  _mm512_mask_mov_ps(_mm512_setzero_ps(), _mm512_cmp_ps_mask(x, y, z), _mm512_castsi512_ps(_mm512_set1_epi32(-1)))
 #define simdf32_or(x,y)     _mm512_or_ps(x,y)
 #define simdf32_and(x,y)    _mm512_and_ps(x,y)
 #define simdf32_andnot(x,y) _mm512_andnot_ps(x,y)
@@ -344,7 +363,7 @@ typedef __m512i simd_int;
 #define simdi_andnot(x,y)   _mm512_andnot_si512(x,y)
 #define simdi_xor(x,y)      _mm512_xor_si512(x,y)
 #define simdi8_shiftl(x,y)  simdi8_shift_left<y>(x)
-#define simdi8_shiftr(x,y)  NOT_YET_IMP()
+#define simdi8_shiftr(x,y)  simdi8_shift_right<y>(x)
 #define simdi8_movemask(x)  _mm512_movepi8_mask(x)
 #define simdi16_extract(x,y) NOT_YET_IMP()         // no 16 bit version available, 
 #define simdi16_slli(x,y)	_mm512_slli_epi16(x,y) // shift integers in a left by y

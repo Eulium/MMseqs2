@@ -591,7 +591,11 @@ std::pair<alignment_end, alignment_end> sw_sse2_int(
 		end:
 		vMaxScore = simdi32_max(vMaxScore, vMaxColumn);
 		vTemp = simdi32_eq(vMaxMark, vMaxScore);
-		uint32_t cmp = simdi8_movemask(vTemp);
+		#ifdef AVX512
+			uint64_t cmp = simdi8_movemask(vTemp);
+		#else
+			uint32_t cmp = simdi8_movemask(vTemp);
+		#endif
 		if (cmp != SIMD_MOVEMASK_MAX) {
 			uint32_t temp;
 			vMaxMark = vMaxScore;

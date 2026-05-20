@@ -199,7 +199,7 @@ inline bool isGapOrN(const char *codon) {
 }
 
 template <int N>
-#ifndef AVX2
+#ifdef not defined(AVX2) && not defined(AVX512)
 inline bool isInCodons(const char* sequence, simd_int codons, simd_int codons2) {
 #else
 inline bool isInCodons(const char* sequence, simd_int codons, simd_int) {
@@ -216,7 +216,7 @@ inline bool isInCodons(const char* sequence, simd_int codons, simd_int) {
     c = simdi_and(mask, c);
     // t: FFFF 0000 0000 0000
     simd_int test = simdi32_eq(c, codons);
-#ifndef AVX2
+#ifdef not defined(AVX2) && not defined(AVX512)
     if (N > 4) {
         simd_int test2 = simdi32_eq(c, codons2);
         return (simdi8_movemask(test) != 0) && (simdi8_movemask(test2) != 0);

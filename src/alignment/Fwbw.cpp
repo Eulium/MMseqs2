@@ -51,7 +51,7 @@ inline simd_float simdf32_prefixsum(simd_float a) {
 #endif
 #ifdef AVX512
     a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdi8_shiftl(simdf_f2icast(a), 16), 16))); // currently not possible to shift 32 bits at once 
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 32)));
 #endif 
     return a;
 // Fallback scalar implementation
