@@ -136,18 +136,32 @@ inline float simdf32_hadd(const __m512 buffer) {
 //     return _mm512_alignr_epi8(a,mask2,16-N);
 // }
 
+// template <unsigned int N>
+// inline __m512i simdi8_shift_right(__m512i a) { 
+//     // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
+//     __m512i carry = _mm512_setzero_si512();
+//     return _mm512_alignr_epi32(carry, a, N);
+// }
+
+// template <unsigned int N>
+// inline __m512i simdi8_shift_left(__m512i a) {
+//     // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
+//     __m512i carry = _mm512_setzero_si512();
+//     return _mm512_alignr_epi32(a, carry, 8-N);
+// }
+
 template<int N>
-inline __m512i simdi8_shift_right(__m512i a) { 
-    // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
-    __m512i carry = _mm512_setzero_si512();
-    return _mm512_alignr_epi32(carry, a, N);
+__m512i simdi8_shift_right(__m512i a, __m512i carry = _mm512_setzero_si512())
+{
+  if (N   == 0) return a;
+  if (N   ==64) return carry;
+  if (N%4 == 0) return _mm512_alignr_epi32(carry, a, N / 4);
 }
 
-template  <unsigned int N>
-inline __m512i simdi8_shift_left(__m512i a) {
-    // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
-    __m512i carry = _mm512_setzero_si512();
-    return _mm512_alignr_epi32(a, carry, (8-N));
+template<int N>
+__m512i simdi8_shift_left(__m512i a, __m512i carry = _mm512_setzero_si512())
+{
+  return shift_right<64-N>(carry, a);
 }
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {
@@ -161,7 +175,7 @@ inline __m512i simdi16_gt_avx512(__m512i a, __m512i b) {
 }
 
 inline __m512i simdi8_gt_avx512(__m512i a, __m512i b) {
-    __mmask64 mask = _mm512_cmp_epi8_mask(_MM_CMPINT_NLE);
+    __mmask64 mask = _mm512_cmp_epi8_mask(a, b, _MM_CMPINT_NLE);
     return _mm512_mask_mov_epi8(_mm512_setzero_si512(), mask, _mm512_set1_epi8(-1));
 }
 
