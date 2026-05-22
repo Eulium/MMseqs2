@@ -153,15 +153,13 @@ inline float simdf32_hadd(const __m512 buffer) {
 template<int N>
 __m512i simdi8_shift_right(__m512i a, __m512i carry = _mm512_setzero_si512())
 {
-  if (N   == 0) return a;
-  if (N   ==64) return carry;
-  if (N%4 == 0) return _mm512_alignr_epi32(carry, a, N / 4);
+    return _mm512_alignr_epi8(carry, a, N);
 }
 
 template<int N>
 __m512i simdi8_shift_left(__m512i a, __m512i carry = _mm512_setzero_si512())
 {
-  return shift_right<64-N>(carry, a);
+    return simdi8_shift_right<16-N>(carry, a);
 }
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {

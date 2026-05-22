@@ -44,16 +44,7 @@ inline void calculate_max4(float& max, float& term1, float& term2, float& term3,
 }
 
 inline simd_float simdf32_prefixsum(simd_float a) {
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 4)));
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 8)));
-#ifdef AVX2
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
-#endif
-#ifdef AVX512
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
-    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 32)));
-#endif 
-    return a;
+    simdf32_hadd(a);
 // Fallback scalar implementation
 //     float buf[8];
 //     simdf32_storeu(buf, a);
