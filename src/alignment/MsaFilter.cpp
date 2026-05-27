@@ -473,9 +473,9 @@ size_t MsaFilter::filter(const int N_in_total, const int L, const int coverage, 
                         // int _mm_movemask_epi8(__m128i a) creates 16-bit mask from most significant bits of
                         // the 16 signed or unsigned 8-bit integers in a and zero-extends the upper bits.
                         #ifdef AVX512
-                            int64_t res = (int64_t)simdi8_movemask(simdi_or(NO_AA_K, NO_AA_J));
+                            uint64_t res = (uint64_t)simdi8_movemask(simdi_or(NO_AA_K, NO_AA_J));
                             cov_kj -= __builtin_popcount(res);  // subtract positions that should not contribute to coverage
-                            int64_t c = (int64_t)simdi8_movemask(simdi8_eq(XK[i], XJ[i]));
+                            uint64_t c = (uint64_t)simdi8_movemask(simdi8_eq(XK[i], XJ[i]));
                             diff += (VECSIZE_INT * 4) - __builtin_popcount(c | res);
                         #else
                             int res = simdi8_movemask(simdi_or(NO_AA_K, NO_AA_J));

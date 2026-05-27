@@ -153,13 +153,27 @@ inline float simdf32_hadd(const __m512 buffer) {
 template<int N>
 __m512i simdi8_shift_right(__m512i a, __m512i carry = _mm512_setzero_si512())
 {
-    return _mm512_alignr_epi8(carry, a, N);
+    //return _mm512_alignr_epi8(carry, a, N);
+    // lane0 gets a lane1, lane1 gets a lane2, lane2 gets a lane3, lane3 gets carry lane0.
+    __m512i next = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(3, 3, 2, 1));
+    __m512i carry_lo = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(0, 0, 0, 0));
+    next = _mm512_mask_mov_epi32(next, 0xF000, carry_lo);
+
+    return _mm512_alignr_epi8(next, a, N);    
+
 }
 
 template<int N>
 __m512i simdi8_shift_left(__m512i a, __m512i carry = _mm512_setzero_si512())
 {
-    return simdi8_shift_right<16-N>(carry, a);
+    //return _mm512_alignr_epi8(a, carry, 16-N);
+    // lane0 gets carry lane3, lane1 gets a lane0, lane2 gets a lane1, lane3 gets a lane2.
+    __m512i prev = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(2, 1, 0, 0));
+    __m512i carry_hi = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(3, 3, 3, 3));
+    prev = _mm512_mask_mov_epi32(prev, 0x000F, carry_hi);
+    
+    return _mm512_alignr_epi8(a, prev, 16 - N);
+
 }
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {
@@ -203,7 +217,7 @@ inline __m512d simdf64_gt_avx512(__m512d a, __m512d b) {
 }
 
 inline __m512d simdf64_lt_avx512(__m512d a, __m512d b) {
-    __mmask8 mask = _mm512_cmp_pd_mask(a, b, _CMP_GT_OS);
+    __mmask8 mask = _mm512_cmp_pd_mask(a, b, _CMP_LT_OS);
     return _mm512_mask_mov_pd(_mm512_setzero_pd(), mask, _mm512_castsi512_pd(_mm512_set1_epi32(-1)));
 }
 
@@ -228,8 +242,9 @@ inline __mmask16 simdf32_mask_from_ps_avx512(__m512 m) {
 }
 
 inline bool simd_any_avx512(const __m512i buffer) {
-    const uint64_t mask = (uint64_t)_mm512_movepi8_mask(buffer);
-    return (mask != 0);
+    const __m512i vZero = _mm512_setzero_si512();
+    const uint64_t mask = (uint64_t) _mm512_cmpeq_epi8_mask(buffer, vZero);
+    return (mask != 0xFFFFFFFFFFFFFFFFULL);
 }
 
 inline bool simd_eq_all_avx512(const __m512i a, const __m512i b) {
@@ -367,7 +382,7 @@ typedef __m512i simd_int;
 #define simdi16_lt(x,y)     simdi16_gt_avx512(y, x)
 #define simdi8_lt(x,y)      simdi8_gt_avx512(y, x)
 
-#define SIMD_MOVEMASK_MAX   0xffffffffffffffff  // not sure if correct since 
+#define SIMD_MOVEMASK_MAX   0xffffffffffffffff  // not sure if correct 
 #define simd_any(x)         simd_any_avx512(x)
 #define simd_eq_all(x,y)    simd_eq_all_avx512(x,y)
 #define simdi_or(x,y)       _mm512_or_si512(x,y)
