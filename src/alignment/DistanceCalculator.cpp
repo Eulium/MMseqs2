@@ -16,7 +16,7 @@ unsigned int DistanceCalculator::computeInverseHammingDistance(const T *seq1, co
         simd_int seqComparision = simdi8_eq(seq1vec, seq2vec);
         #ifdef AVX512
             uint64_t res = (uint64_t)simdi8_movemask(seqComparision);
-            diff += __builtin_popcount(res);  // subtract positions that should not contribute to coverage
+            diff += __builtin_popcountll(res);  // subtract positions that should not contribute to coverage
         #else
             int res = simdi8_movemask(seqComparision);
             diff += __builtin_popcount(res);  // subtract positions that should not contribute to coverage
