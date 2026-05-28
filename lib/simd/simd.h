@@ -59,27 +59,27 @@
 #include <simde/x86/avx512.h>
 
 inline float simdf32_hmax_avx512(const __m512 buffer) {
-    const __m512 shuffel1 = _mm512_shuffle_ps(buffer, buffer,_MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 max1 = _mm512_max_ps(buffer, shuffel1);
-    const __m512 shuffel2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
-    const __m512 max2 = _mm512_max_ps(max1, shuffel2);
-    const __m512 shuffel3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 max3 = _mm512_max_ps(max2, shuffel3);
-    const __m512 shuffel4 = _mm512_shuffle_f32x4(max3, max3, _MM_SHUFFLE(2, 3, 1, 0));
-    const __m512 max4 = _mm512_max_ps(max3, shuffel4);
+    const __m512 shuffle1 = _mm512_shuffle_ps(buffer, buffer,_MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 max1 = _mm512_max_ps(buffer, shuffle1);
+    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 max2 = _mm512_max_ps(max1, shuffle2);
+    const __m512 shuffle3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 max3 = _mm512_max_ps(max2, shuffle3);
+    const __m512 shuffle4 = _mm512_shuffle_f32x4(max3, max3, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 max4 = _mm512_max_ps(max3, shuffle4);
     // const __m128 max128 = _mm512_castps512_ps128(max4);
     return _mm512_cvtss_f32(max4);
 }
 
 inline uint32_t simdi32_hmax_avx512(const __m512i buffer) {
-    const __m512i shuffel1 = _mm512_shuffle_epi32(buffer, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512i max1 = _mm512_max_epi32(buffer, shuffel1);
-    const __m512i shuffel2 = _mm512_shuffle_epi32(max1, _MM_SHUFFLE(2, 3, 0, 1));
-    const __m512i max2 = _mm512_max_epi32(max1, shuffel2);
-    const __m512i shuffel3 = _mm512_shuffle_i32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512i max3 = _mm512_max_epi32(max2, shuffel3);
-    const __m512i shuffel4 = _mm512_shuffle_i32x4(max3, max3, _MM_SHUFFLE(2, 3, 1, 0));
-    const __m512i max4 = _mm512_max_epi32(max3, shuffel4);
+    const __m512i shuffle1 = _mm512_shuffle_epi32(buffer, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512i max1 = _mm512_max_epi32(buffer, shuffle1);
+    const __m512i shuffle2 = _mm512_shuffle_epi32(max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512i max2 = _mm512_max_epi32(max1, shuffle2);
+    const __m512i shuffle3 = _mm512_shuffle_i32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512i max3 = _mm512_max_epi32(max2, shuffle3);
+    const __m512i shuffle4 = _mm512_shuffle_i32x4(max3, max3, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512i max4 = _mm512_max_epi32(max3, shuffle4);
     const __m128i max128 = _mm512_castsi512_si128(max4);
     return (uint32_t)_mm_extract_epi32(max128, 0);
 }
@@ -117,14 +117,14 @@ inline uint8_t simdi8_hmax_avx512(const __m512i buffer) {
 
 
 inline float simdf32_hadd(const __m512 buffer) {
-    const __m512 shuffel1 = _mm512_shuffle_ps(buffer,buffer, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 max1 = _mm512_add_ps(buffer, shuffel1);
-    const __m512 shuffel2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
-    const __m512 max2 = _mm512_add_ps(max1, shuffel2);
-    const __m512 shuffel3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 max3 = _mm512_add_ps(max2, shuffel3);
-    const __m512 shuffel4 = _mm512_shuffle_f32x4(max3, max3, _MM_SHUFFLE(2, 3, 1, 0));
-    const __m512 max4 = _mm512_add_ps(max3, shuffel4);
+    const __m512 shuffle1 = _mm512_shuffle_ps(buffer,buffer, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 max1 = _mm512_add_ps(buffer, shuffle1);
+    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 max2 = _mm512_add_ps(max1, shuffle2);
+    const __m512 shuffle3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 max3 = _mm512_add_ps(max2, shuffle3);
+    const __m512 shuffle4 = _mm512_shuffle_f32x4(max3, max3, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 max4 = _mm512_add_ps(max3, shuffle4);
     return _mm512_cvtss_f32(max4);
 }
 
