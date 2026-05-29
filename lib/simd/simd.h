@@ -155,7 +155,6 @@ inline float simdf32_hadd(const __m512 buffer) {
 //     //return _mm512_alignr_epi8(carry, a, N);
 //     // lane0 gets a lane1, lane1 gets a lane2, lane2 gets a lane3, lane3 gets carry lane0.
 //     __m512i next = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(3, 3, 2, 1));
-//     __m512i carry_lo = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(0, 0, 0, 0));
 //     next = _mm512_mask_mov_epi32(next, 0xF000, carry_lo);
 //     return _mm512_alignr_epi8(next, a, N);
 // }
@@ -163,17 +162,15 @@ inline float simdf32_hadd(const __m512 buffer) {
 // template<int N>
 // __m512i simdi8_shift_left(__m512i a, __m512i carry = _mm512_setzero_si512())
 // {
-//     //return _mm512_alignr_epi8(a, carry, 16-N);
 //     // lane0 gets carry lane3, lane1 gets a lane0, lane2 gets a lane1, lane3 gets a lane2.
 //     __m512i prev = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(2, 1, 0, 0));
-//     __m512i carry_hi = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(3, 3, 3, 3));
-//     prev = _mm512_mask_mov_epi32(prev, 0x000F, carry_hi);
+//     prev = _mm512_mask_mov_epi32(prev, 0x000F, _mm512_setzero_si512());
 //     return _mm512_alignr_epi8(a, prev, 16 - N);
 // }
 
 template  <unsigned int N>
 inline __m512i _mm512_shift_left(__m512i a) {
-    __m512i mask = _mm512_shuffle_i64x2(a, a, _MM_SHUFFLE(2, 1, 0, 3) );
+    __m512i mask = _mm512_permutex2var_epi64(_mm512_setzero_si512(), _mm512_set_epi64(13, 12, 11, 10, 9, 8, 7, 6), a);
     return _mm512_alignr_epi8(a,mask,16-N);
 }
 
