@@ -106,8 +106,8 @@ inline uint8_t simdi8_hmax_avx512(const __m512i buffer) {
     // Use AVX instructions for this because AVX-512 can't extract 8-bit quantities
     // Intel has stated that there will be no performance penalty for switching between AVX-512 and AVX
     __m256i b = _mm256_max_epu8(_mm512_extracti64x4_epi64(buffer, 0), _mm512_extracti64x4_epi64(buffer, 1)); //changed from extract i32x8
-    b = _mm256_max_epu8(b, _mm256_permute2x128_si256(b, b, 0x01));    
-    b = _mm256_max_epu8(b, _mm256_shuffle_epi32     (b,    0x4e));    
+    b = _mm256_max_epu8(b, _mm256_permute2x128_si256(b, b, 0x01));
+    b = _mm256_max_epu8(b, _mm256_shuffle_epi32     (b,    0x4e));
     b = _mm256_max_epu8(b, _mm256_shuffle_epi32     (b,    0xb1));
     b = _mm256_max_epu8(b, _mm256_shufflelo_epi16   (b,    0xb1));
     b = _mm256_max_epu8(b, _mm256_srli_si256        (b,    1));
@@ -136,7 +136,7 @@ inline float simdf32_hadd(const __m512 buffer) {
 // }
 
 // template <unsigned int N>
-// inline __m512i simdi8_shift_right(__m512i a) { 
+// inline __m512i simdi8_shift_right(__m512i a) {
 //     // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
 //     __m512i carry = _mm512_setzero_si512();
 //     return _mm512_alignr_epi32(carry, a, N);
@@ -157,8 +157,7 @@ inline float simdf32_hadd(const __m512 buffer) {
 //     __m512i next = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(3, 3, 2, 1));
 //     __m512i carry_lo = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(0, 0, 0, 0));
 //     next = _mm512_mask_mov_epi32(next, 0xF000, carry_lo);
-
-//     return _mm512_alignr_epi8(next, a, N);    
+//     return _mm512_alignr_epi8(next, a, N);
 // }
 
 // template<int N>
@@ -169,13 +168,12 @@ inline float simdf32_hadd(const __m512 buffer) {
 //     __m512i prev = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(2, 1, 0, 0));
 //     __m512i carry_hi = _mm512_shuffle_i32x4(carry, carry, _MM_SHUFFLE(3, 3, 3, 3));
 //     prev = _mm512_mask_mov_epi32(prev, 0x000F, carry_hi);
-    
 //     return _mm512_alignr_epi8(a, prev, 16 - N);
 // }
 
 template  <unsigned int N>
 inline __m512i _mm512_shift_left(__m512i a) {
-    __m512i mask = _mm512_shuffle_i64x2(_mm512_setzero_si512(), a, _MM_SHUFFLE(1,0,0,0) );
+    __m512i mask = _mm512_shuffle_i64x2(a, a, _MM_SHUFFLE(2, 1, 0, 3) );
     return _mm512_alignr_epi8(a,mask,16-N);
 }
 
@@ -385,7 +383,7 @@ typedef __m512i simd_int;
 #define simdi16_lt(x,y)     simdi16_gt_avx512(y, x)
 #define simdi8_lt(x,y)      simdi8_gt_avx512(y, x)
 
-#define SIMD_MOVEMASK_MAX   0xffffffffffffffff  // not sure if correct 
+#define SIMD_MOVEMASK_MAX   0xffffffffffffffff  // not sure if correct
 #define simd_any(x)         simd_any_avx512(x)
 #define simd_eq_all(x,y)    simd_eq_all_avx512(x,y)
 #define simdi_or(x,y)       _mm512_or_si512(x,y)
@@ -395,7 +393,7 @@ typedef __m512i simd_int;
 #define simdi8_shiftl(x,y)  _mm512_shift_left<y>(x)
 //#define simdi8_shiftr(x,y)  simdi8_shift_right<y>(x)
 #define simdi8_movemask(x)  _mm512_movepi8_mask(x)
-#define simdi16_extract(x,y) NOT_YET_IMP()         // no 16 bit version available, 
+#define simdi16_extract(x,y) NOT_YET_IMP()         // no 16 bit version available
 #define simdi16_slli(x,y)	_mm512_slli_epi16(x,y) // shift integers in a left by y
 #define simdi16_srli(x,y)	_mm512_srli_epi16(x,y) // shift integers in a right by y
 #define simdi32_slli(x,y)	_mm512_slli_epi32(x,y) // shift integers in a left by y
