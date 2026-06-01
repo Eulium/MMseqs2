@@ -127,27 +127,6 @@ inline float simdf32_hadd(const __m512 buffer) {
     return _mm512_cvtss_f32(max4);
 }
 
-// template  <unsigned int N>
-// inline __m512i simdi8_shift_left(__m512i a) {
-//     // only works for N <= 16
-//     __m512i mask = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(1, 0, 3, 2));
-//     __m512i mask2 = _mm512_maskz_mov_epi32(0xFF00,mask);
-//     return _mm512_alignr_epi8(a,mask2,16-N);
-// }
-
-// template <unsigned int N>
-// inline __m512i simdi8_shift_right(__m512i a) {
-//     // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
-//     __m512i carry = _mm512_setzero_si512();
-//     return _mm512_alignr_epi32(carry, a, N);
-// }
-
-// template <unsigned int N>
-// inline __m512i simdi8_shift_left(__m512i a) {
-//     // N is in bytes, only works for shifting possitions as multiple of 8 bits, ie. 8, 16, 32 bits 
-//     __m512i carry = _mm512_setzero_si512();
-//     return _mm512_alignr_epi32(a, carry, 8-N);
-// }
 
 // template<int N>
 // __m512i simdi8_shift_right(__m512i a, __m512i carry = _mm512_setzero_si512())
@@ -170,6 +149,7 @@ inline float simdf32_hadd(const __m512 buffer) {
 
 template  <unsigned int N>
 inline __m512i _mm512_shift_left(__m512i a) {
+    //Only work for N <= 16
     __m512i mask = _mm512_permutex2var_epi64(_mm512_setzero_si512(), _mm512_set_epi64(13, 12, 11, 10, 9, 8, 7, 6), a);
     return _mm512_alignr_epi8(a,mask,16-N);
 }
@@ -381,6 +361,8 @@ typedef __m512i simd_int;
 #define simdi8_lt(x,y)      simdi8_gt_avx512(y, x)
 
 #define SIMD_MOVEMASK_MAX   0xffffffffffffffff  // not sure if correct
+typedef uint64_t            movemask_max_t;
+#define popcount(x)         __builtin_popcountll(x)
 #define simd_any(x)         simd_any_avx512(x)
 #define simd_eq_all(x,y)    simd_eq_all_avx512(x,y)
 #define simdi_or(x,y)       _mm512_or_si512(x,y)
@@ -580,6 +562,8 @@ typedef __m256i simd_int;
 //TODO fix like shift_left
 #define simdi8_shiftr(x,y)  _mm256_srli_si256(x,y)
 #define SIMD_MOVEMASK_MAX   0xffffffff
+typedef uint32_t            movemask_max_t;
+#define popcount(x)         __builtin_popcount(x)
 #define simdi8_movemask(x)  _mm256_movemask_epi8(x)
 #define simdi16_extract(x,y) extract_epi16(x,y)
 #define simdi32_pack(x,y)   _mm256_packs_epi32(x,y)
@@ -870,6 +854,8 @@ typedef __m128i simd_int;
 #define simdi8_shiftl(x,y)  _mm_slli_si128(x,y)
 #define simdi8_shiftr(x,y)  _mm_srli_si128(x,y)
 #define SIMD_MOVEMASK_MAX   0xffff
+typedef uint32_t            movemask_max_t;
+#define popcount(x)         __builtin_popcount(x)
 #define simdi8_movemask(x)  _mm_movemask_epi8(x)
 #define simdi16_extract(x,y) extract_epi16(x,y)
 #define simdi32_pack(x,y)   _mm_packs_epi32(x,y)
