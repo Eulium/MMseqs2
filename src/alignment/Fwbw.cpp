@@ -44,34 +44,27 @@ inline void calculate_max4(float& max, float& term1, float& term2, float& term3,
 }
 
 inline simd_float simdf32_prefixsum(simd_float a) {
-//simdf32_hadd(a);
-// Fallback scalar implementation
-    float buf[16];
-    simdf32_storeu(buf, a);
-
-    buf[1] += buf[0];
-    buf[2] += buf[1];
-    buf[3] += buf[2];
 #if defined(AVX2)
-    buf[4] += buf[3];
-    buf[5] += buf[4];
-    buf[6] += buf[5];
-    buf[7] += buf[6];
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 4)));
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 8)));
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
+    return a; 
 #elif defined(AVX512)
-    buf[4] += buf[3];
-    buf[5] += buf[4];
-    buf[6] += buf[5];
-    buf[7] += buf[6];
-    buf[8] += buf[7];
-    buf[9] += buf[8];
-    buf[10] += buf[9];
-    buf[11] += buf[10];
-    buf[12] += buf[11];
-    buf[13] += buf[12];
-    buf[14] += buf[13];
-    buf[15] += buf[14];
+    // would need left shift by 32 byte, simdi8_shiftl only suppors up to 16 byte
+    const __m512 shuffle1 = _mm512_shuffle_ps(a,a, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 add1 = _mm512_add_ps(a, shuffle1);
+    const __m512 shuffle2 = _mm512_shuffle_ps(add1, add1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 add2 = _mm512_add_ps(add1, shuffle2);
+    const __m512 shuffle3 = _mm512_shuffle_f32x4(add2, add2, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 add3 = _mm512_add_ps(add2, shuffle3);
+    const __m512 shuffle4 = _mm512_shuffle_f32x4(add3, add3, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 add4 = _mm512_add_ps(add3, shuffle4);
+    return add4;
+#else
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 4)));
+    a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 8)));
+    return a;
 #endif
-    return simdf32_loadu(buf);
 }
 
 // FwBwAligner Constructor for general case: use profile scoring matrix
