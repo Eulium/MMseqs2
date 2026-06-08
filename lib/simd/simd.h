@@ -59,9 +59,9 @@
 #include <simde/x86/avx512.h>
 
 inline float simdf32_hmax_avx512(const __m512 buffer) {
-    const __m512 shuffle1 = _mm512_shuffle_ps(buffer, buffer,_MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 shuffle1 = _mm512_shuffle_ps(buffer, buffer,(_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max1 = _mm512_max_ps(buffer, shuffle1);
-    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
     const __m512 max2 = _mm512_max_ps(max1, shuffle2);
     const __m512 shuffle3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max3 = _mm512_max_ps(max2, shuffle3);
@@ -72,9 +72,9 @@ inline float simdf32_hmax_avx512(const __m512 buffer) {
 }
 
 inline uint32_t simdi32_hmax_avx512(const __m512i buffer) {
-    const __m512i shuffle1 = _mm512_shuffle_epi32(buffer, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512i shuffle1 = _mm512_shuffle_epi32(buffer, (_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512i max1 = _mm512_max_epi32(buffer, shuffle1);
-    const __m512i shuffle2 = _mm512_shuffle_epi32(max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512i shuffle2 = _mm512_shuffle_epi32(max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
     const __m512i max2 = _mm512_max_epi32(max1, shuffle2);
     const __m512i shuffle3 = _mm512_shuffle_i32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
     const __m512i max3 = _mm512_max_epi32(max2, shuffle3);
@@ -116,9 +116,9 @@ inline uint8_t simdi8_hmax_avx512(const __m512i buffer) {
 
 
 inline float simdf32_hadd(const __m512 buffer) {
-    const __m512 shuffle1 = _mm512_shuffle_ps(buffer,buffer, _MM_SHUFFLE(1, 0, 3, 2));
+    const __m512 shuffle1 = _mm512_shuffle_ps(buffer,buffer, (_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max1 = _mm512_add_ps(buffer, shuffle1);
-    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, _MM_SHUFFLE(2, 3, 0, 1));
+    const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
     const __m512 max2 = _mm512_add_ps(max1, shuffle2);
     const __m512 shuffle3 = _mm512_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max3 = _mm512_add_ps(max2, shuffle3);
