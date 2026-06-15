@@ -135,26 +135,22 @@ inline __m512i _mm512_shift_left(__m512i a) {
     return _mm512_alignr_epi8(a,mask,16-N);
 }
 
-template  <>
-inline __m512i _mm512_shift_left4<4>(__m512i a) {
+inline __m512i _mm512_shift_left4(__m512i a) {
     //Only work for N == 4
     return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 4)/ 4);
 }
 
-template  <>
-inline __m512i _mm512_shift_left4<8>(__m512i a) {
+inline __m512i _mm512_shift_left8(__m512i a) {
     //Only work for N == 8
     return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 8)/ 4);
 }
 
-template  <>
-inline __m512i _mm512_shift_left4<16>(__m512i a) {
+inline __m512i _mm512_shift_left16(__m512i a) {
     //Only work for N == 16
     return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 16)/ 4);
 }
 
-template  <>
-inline __m512i _mm512_shift_left4<32>(__m512i a) {
+inline __m512i _mm512_shift_left32(__m512i a) {
     //Only work for N == 32
     return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 32)/ 4);
 }

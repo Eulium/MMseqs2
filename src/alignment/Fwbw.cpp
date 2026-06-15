@@ -50,10 +50,10 @@ inline simd_float simdf32_prefixsum(simd_float a) {
     a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
     return a; 
 #elif defined(AVX512)
-    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<4>(simdf_f2icast(a))));
-    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<8>(simdf_f2icast(a))));
-    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<16>(simdf_f2icast(a))));
-    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<32>(simdf_f2icast(a)))); 
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left8(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left16(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left32(simdf_f2icast(a)))); 
     return a;
 
 #else
