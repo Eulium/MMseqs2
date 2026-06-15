@@ -50,16 +50,12 @@ inline simd_float simdf32_prefixsum(simd_float a) {
     a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 16)));
     return a; 
 #elif defined(AVX512)
-    // would need left shift by 32 byte, simdi8_shiftl only suppors up to 16 byte
-    const __m512 shuffle1 = _mm512_shuffle_ps(a,a, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 add1 = _mm512_add_ps(a, shuffle1);
-    const __m512 shuffle2 = _mm512_shuffle_ps(add1, add1, _MM_SHUFFLE(2, 3, 0, 1));
-    const __m512 add2 = _mm512_add_ps(add1, shuffle2);
-    const __m512 shuffle3 = _mm512_shuffle_f32x4(add2, add2, _MM_SHUFFLE(1, 0, 3, 2));
-    const __m512 add3 = _mm512_add_ps(add2, shuffle3);
-    const __m512 shuffle4 = _mm512_shuffle_f32x4(add3, add3, _MM_SHUFFLE(2, 3, 0, 1));
-    const __m512 add4 = _mm512_add_ps(add3, shuffle4);
-    return add4;
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<4>(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<8>(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<16>(simdf_f2icast(a))));
+    a = simdf32_add(a, simdi_i2fcast(_mm512_shift_left4<32>(simdf_f2icast(a)))); 
+    return a;
+
 #else
     a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 4)));
     a = simdf32_add(a, simdi_i2fcast(simdi8_shiftl(simdf_f2icast(a), 8)));

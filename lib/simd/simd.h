@@ -54,8 +54,9 @@
 // #endif
 
 #ifdef AVX512
-// #include <simde/x86/avx512bw.h>
-// #include <simde/x86/avx512f.h>
+// FIXME: Remove after updating SIMDe, headers are buggy in this versions
+#define SIMDE_X86_AVX512_CMPLE_H
+#define SIMDE_X86_AVX512_CMPGE_H
 #include <simde/x86/avx512.h>
 
 inline float simdf32_hmax_avx512(const __m512 buffer) {
@@ -127,31 +128,35 @@ inline float simdf32_hadd(const __m512 buffer) {
     return _mm512_cvtss_f32(max4);
 }
 
-
-// template<int N>
-// __m512i simdi8_shift_right(__m512i a, __m512i carry = _mm512_setzero_si512())
-// {
-//     //return _mm512_alignr_epi8(carry, a, N);
-//     // lane0 gets a lane1, lane1 gets a lane2, lane2 gets a lane3, lane3 gets carry lane0.
-//     __m512i next = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(3, 3, 2, 1));
-//     next = _mm512_mask_mov_epi32(next, 0xF000, carry_lo);
-//     return _mm512_alignr_epi8(next, a, N);
-// }
-
-// template<int N>
-// __m512i simdi8_shift_left(__m512i a, __m512i carry = _mm512_setzero_si512())
-// {
-//     // lane0 gets carry lane3, lane1 gets a lane0, lane2 gets a lane1, lane3 gets a lane2.
-//     __m512i prev = _mm512_shuffle_i32x4(a, a, _MM_SHUFFLE(2, 1, 0, 0));
-//     prev = _mm512_mask_mov_epi32(prev, 0x000F, _mm512_setzero_si512());
-//     return _mm512_alignr_epi8(a, prev, 16 - N);
-// }
-
 template  <unsigned int N>
 inline __m512i _mm512_shift_left(__m512i a) {
     //Only work for N <= 16
     __m512i mask = _mm512_permutex2var_epi64(_mm512_setzero_si512(), _mm512_set_epi64(13, 12, 11, 10, 9, 8, 7, 6), a);
     return _mm512_alignr_epi8(a,mask,16-N);
+}
+
+template  <>
+inline __m512i _mm512_shift_left4<4>(__m512i a) {
+    //Only work for N == 4
+    return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 4)/ 4);
+}
+
+template  <>
+inline __m512i _mm512_shift_left4<8>(__m512i a) {
+    //Only work for N == 8
+    return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 8)/ 4);
+}
+
+template  <>
+inline __m512i _mm512_shift_left4<16>(__m512i a) {
+    //Only work for N == 16
+    return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 16)/ 4);
+}
+
+template  <>
+inline __m512i _mm512_shift_left4<32>(__m512i a) {
+    //Only work for N == 32
+    return _mm512_alignr_epi32(a, _mm512_setzero_si512(), (64 - 32)/ 4);
 }
 
 inline __m512i simdi32_gt_avx512(__m512i a, __m512i b) {
