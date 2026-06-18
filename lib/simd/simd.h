@@ -60,6 +60,9 @@
 #include <simde/x86/avx512.h>
 
 inline float simdf32_hmax_avx512(const __m512 buffer) {
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+    return _mm512_reduce_max_ps(buffer);
+#else
     const __m512 shuffle1 = _mm512_shuffle_ps(buffer, buffer,(_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max1 = _mm512_max_ps(buffer, shuffle1);
     const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
@@ -70,9 +73,13 @@ inline float simdf32_hmax_avx512(const __m512 buffer) {
     const __m512 max4 = _mm512_max_ps(max3, shuffle4);
     // const __m128 max128 = _mm512_castps512_ps128(max4);
     return _mm512_cvtss_f32(max4);
+#endif
 }
 
 inline uint32_t simdi32_hmax_avx512(const __m512i buffer) {
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+    return (uint32_t)_mm512_reduce_max_epi32(buffer);
+#else
     const __m512i shuffle1 = _mm512_shuffle_epi32(buffer, (_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512i max1 = _mm512_max_epi32(buffer, shuffle1);
     const __m512i shuffle2 = _mm512_shuffle_epi32(max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
@@ -82,41 +89,29 @@ inline uint32_t simdi32_hmax_avx512(const __m512i buffer) {
     const __m512i shuffle4 = _mm512_shuffle_i32x4(max3, max3, _MM_SHUFFLE(2, 3, 0, 1));
     const __m512i max4 = _mm512_max_epi32(max3, shuffle4);
     return (uint32_t)_mm512_cvtsi512_si32(max4);
+#endif
 }
 
 uint16_t simd_hmax16_sse(const __m128i buffer);
+uint8_t simd_hmax8_sse(const __m128i buffer);
 
 inline uint16_t simdi16_hmax_avx512(const __m512i buffer) {
-    const __m128i abcd = _mm512_castsi512_si128(buffer);
-    const uint16_t first = simd_hmax16_sse(abcd);
-    const __m128i efgh = _mm512_extracti32x4_epi32(buffer, 1);
-    const uint16_t second = simd_hmax16_sse(efgh);
-    const uint16_t lower = std::max(first, second);
-
-    const __m128i hijk = _mm512_extracti32x4_epi32(buffer, 2);
-    const uint16_t third = simd_hmax16_sse(hijk);
-    const __m128i lmno = _mm512_extracti32x4_epi32(buffer, 3);
-    const uint16_t forth = simd_hmax16_sse(lmno);
-    const uint16_t upper = std::max(third, forth);
-
-    return std::max(lower, upper);
+    __m512i max1 = _mm512_max_epu16(buffer, _mm512_shuffle_i32x4(buffer, buffer, _MM_SHUFFLE(1, 0, 3, 2)));
+    __m512i max2 = _mm512_max_epu16(max1, _mm512_shuffle_i32x4(max1, max1, _MM_SHUFFLE(2, 3, 0, 1)));
+    return simd_hmax16_sse(_mm512_castsi512_si128(max2));
 }
 
 inline uint8_t simdi8_hmax_avx512(const __m512i buffer) {
-    // https://github.com/EddyRivasLab/easel/blob/07ca83ba9ef0414dba9ce0a9331d465b5eb58f2b/esl_avx512.h#L35-L63
-    // Use AVX instructions for this because AVX-512 can't extract 8-bit quantities
-    // Intel has stated that there will be no performance penalty for switching between AVX-512 and AVX
-    __m256i b = _mm256_max_epu8(_mm512_extracti64x4_epi64(buffer, 0), _mm512_extracti64x4_epi64(buffer, 1)); //changed from extract i32x8
-    b = _mm256_max_epu8(b, _mm256_permute2x128_si256(b, b, 0x01));
-    b = _mm256_max_epu8(b, _mm256_shuffle_epi32     (b,    0x4e));
-    b = _mm256_max_epu8(b, _mm256_shuffle_epi32     (b,    0xb1));
-    b = _mm256_max_epu8(b, _mm256_shufflelo_epi16   (b,    0xb1));
-    b = _mm256_max_epu8(b, _mm256_srli_si256        (b,    1));
-    return _mm256_extract_epi8(b, 0);  // epi8 is fine here. gets cast properly to uint8_t on return.
+    __m512i max1 = _mm512_max_epu8(buffer, _mm512_shuffle_i32x4(buffer, buffer, _MM_SHUFFLE(1, 0, 3, 2)));
+    __m512i max2 = _mm512_max_epu8(max1, _mm512_shuffle_i32x4(max1, max1, _MM_SHUFFLE(2, 3, 0, 1)));
+    return simd_hmax8_sse(_mm512_castsi512_si128(max2));
 }
 
 
 inline float simdf32_hadd(const __m512 buffer) {
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_COMPILER)
+    return _mm512_reduce_add_ps(buffer);
+#else
     const __m512 shuffle1 = _mm512_shuffle_ps(buffer,buffer, (_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
     const __m512 max1 = _mm512_add_ps(buffer, shuffle1);
     const __m512 shuffle2 = _mm512_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
@@ -126,6 +121,7 @@ inline float simdf32_hadd(const __m512 buffer) {
     const __m512 shuffle4 = _mm512_shuffle_f32x4(max3, max3, _MM_SHUFFLE(2, 3, 0, 1));
     const __m512 max4 = _mm512_add_ps(max3, shuffle4);
     return _mm512_cvtss_f32(max4);
+#endif
 }
 
 template  <unsigned int N>
@@ -452,11 +448,11 @@ inline bool simd_eq_all_avx(const __m256i a, const __m256i b) {
 float simdf32_hmax_sse(const __m128 buffer);
 
 inline float simdf32_hmax_avx(const __m256 buffer) {
-    const __m128 lower = _mm256_castps256_ps128(buffer); // Lower 128 bits
-    const __m128 upper = _mm256_extractf128_ps(buffer, 1); // Upper 128 bits
-    const float lower_max = simdf32_hmax_sse(lower);
-    const float upper_max = simdf32_hmax_sse(upper);
-    return std::max(lower_max, upper_max);
+    __m256 max1 = _mm256_max_ps(buffer, _mm256_permute2f128_ps(buffer, buffer, 1));
+    __m128 max128 = _mm256_castps256_ps128(max1);
+    max128 = _mm_max_ps(max128, _mm_movehl_ps(max128, max128));
+    max128 = _mm_max_ss(max128, _mm_shuffle_ps(max128, max128, 1));
+    return _mm_cvtss_f32(max128);
 }
 __m128 simdf32_reverse_sse(const __m128 buffer);
 
