@@ -545,18 +545,26 @@ void FwBwAligner::forward() {
                 zeFirst[i+1] -= current_max;
 
 #if defined(AVX512)
-                simd_float vNextFirstExp = _mm512_set_ps(
-                    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                    0.0f, 0.0f, 0.0f,
-                    zfFirst[i] - current_max, 
-                    zeFirst[i] - log_zmMax,
-                    zmFirst[i] - log_zmMax,
-                    zeFirst[i+1],
-                    zmFirst[i+1]
-                );
-                vNextFirstExp = simdf32_exp(vNextFirstExp);
-                zmBlockCurr[0] = vNextFirstExp[0]; ze_i0 = vNextFirstExp[1];
-                zmBlockPrev[0] = vNextFirstExp[2]; zeBlock[0] = vNextFirstExp[3]; zfBlock[0] = vNextFirstExp[4];
+                // simd_float vNextFirstExp = _mm512_set_ps(
+                //     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                //     0.0f, 0.0f, 0.0f,
+                //     zfFirst[i] - current_max, 
+                //     zeFirst[i] - log_zmMax,
+                //     zmFirst[i] - log_zmMax,
+                //     zeFirst[i+1],
+                //     zmFirst[i+1]
+                // );
+                // vNextFirstExp = simdf32_exp(vNextFirstExp);
+                // zmBlockCurr[0] = vNextFirstExp[0];
+                // ze_i0 = vNextFirstExp[1];
+                // zmBlockPrev[0] = vNextFirstExp[2];
+                // zeBlock[0] = vNextFirstExp[3];
+                // zfBlock[0] = vNextFirstExp[4];
+                zmBlockCurr[0] = exp(zmFirst[i+1]);
+                ze_i0 = exp(zeFirst[i+1]);
+                zmBlockPrev[0] = exp(zmFirst[i] - log_zmMax);
+                zeBlock[0] = exp(zeFirst[i] - log_zmMax);
+                zfBlock[0] = exp(zfFirst[i] - current_max);
 #elif defined(AVX2)
                 simd_float vNextFirstExp = _mm256_set_ps(
                     0.0f, 0.0f, 0.0f,
