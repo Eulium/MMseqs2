@@ -41,6 +41,20 @@ inline void calculate_max4(float& max, float& term1, float& term2, float& term3,
     else { max = term2; state = States::M; }
     if (term3 > max) { max = term3; state = States::I; }
     if (term4 > max) { max = term4; state = States::D; }
+    // bool take2 = term2 > term1;
+    // float best = take2 ? term2 : term1;
+    // uint8_t st = take2 ? States::M : States::STOP;
+
+    // bool take3 = term3 > best;
+    // best = take3 ? term3 : best;
+    // st = take3 ? States::I : st;
+
+    // bool take4 = term4 > best;
+    // best = take4 ? term4 : best;
+    // st = take4 ? States::D : st;
+
+    // max = best;
+    // state = st;
 }
 
 inline simd_float simdf32_prefixsum(simd_float a) {
@@ -754,34 +768,40 @@ void FwBwAligner::backward()  {
                 }
             }
 
-#if defined(AVX512)
-                simd_float vNextZinit = _mm512_set_ps(
-                    1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                    1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                    zfBlock[memcpy_cols],
-                    zeBlock[memcpy_cols],
-                    zmBlockCurr[memcpy_cols]
-                );
-#elif defined(AVX2)
-                simd_float vNextZinit = _mm256_set_ps(
-                    1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                    zfBlock[memcpy_cols],
-                    zeBlock[memcpy_cols],
-                    zmBlockCurr[memcpy_cols]
-                );
-#else // Fallback to SSE
-                simd_float vNextZinit = _mm_set_ps(
-                    1.0f,
-                    zfBlock[memcpy_cols],
-                    zeBlock[memcpy_cols],
-                    zmBlockCurr[memcpy_cols]
-                );
-#endif
+// #if defined(AVX512)
+//                 simd_float vNextZinit = _mm512_set_ps(
+//                     1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+//                     1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+//                     zfBlock[memcpy_cols],
+//                     zeBlock[memcpy_cols],
+//                     zmBlockCurr[memcpy_cols]
+//                 );
+// #elif defined(AVX2)
+//                 simd_float vNextZinit = _mm256_set_ps(
+//                     1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+//                     zfBlock[memcpy_cols],
+//                     zeBlock[memcpy_cols],
+//                     zmBlockCurr[memcpy_cols]
+//                 );
+// #else // Fallback to SSE
+//                 simd_float vNextZinit = _mm_set_ps(
+//                     1.0f,
+//                     zfBlock[memcpy_cols],
+//                     zeBlock[memcpy_cols],
+//                     zmBlockCurr[memcpy_cols]
+//                 );
+// #endif
 
-            vNextZinit = simdf32_log(vNextZinit);
-            vNextZinit = simdf32_add(vNextZinit, vCurrMax);
+            // vNextZinit = simdf32_log(vNextZinit);
+            // vNextZinit = simdf32_add(vNextZinit, vCurrMax);
 
-            zInit[0][i-1] = vNextZinit[0]; zInit[1][i-1] = vNextZinit[1]; zInit[2][i-1] = vNextZinit[2];
+            // zInit[0][i-1] = vNextZinit[0];
+            // zInit[1][i-1] = vNextZinit[1];
+            // zInit[2][i-1] = vNextZinit[2];
+
+            zInit[0][i-1] = log(zmBlockCurr[memcpy_cols]) + current_max;
+            zInit[1][i-1] = log(zeBlock[memcpy_cols]) + current_max;
+            zInit[2][i-1] = log(zfBlock[memcpy_cols]) + current_max;
             std::swap(zmBlockCurr, zmBlockPrev);
             
             if (i < rowSeqLen) {
@@ -789,18 +809,27 @@ void FwBwAligner::backward()  {
                 zeFirst[i+1] -= current_max;
 
 #if defined(AVX512)
-                simd_float vNextFirstExp = _mm512_set_ps(
-                    0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                    0.0f, 0.0f, 0.0f,
-                    zfFirst[i] - current_max, 
-                    zeFirst[i] - log_zmMax,
-                    zmFirst[i] - log_zmMax,
-                    zeFirst[i+1],
-                    zmFirst[i+1]
-                );
+                // simd_float vNextFirstExp = _mm512_set_ps(
+                //     0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                //     0.0f, 0.0f, 0.0f,
+                //     zfFirst[i] - current_max, 
+                //     zeFirst[i] - log_zmMax,
+                //     zmFirst[i] - log_zmMax,
+                //     zeFirst[i+1],
+                //     zmFirst[i+1]
+                // );
+                // vNextFirstExp = simdf32_exp(vNextFirstExp);
+                // zmBlockCurr[0] = vNextFirstExp[0];
+                // ze_i0 = vNextFirstExp[1];
+                // zmBlockPrev[0] = vNextFirstExp[2];
+                // zeBlock[0] = vNextFirstExp[3];
+                // zfBlock[0] = vNextFirstExp[4];
                 vNextFirstExp = simdf32_exp(vNextFirstExp);
-                zmBlockCurr[0] = vNextFirstExp[0]; ze_i0 = vNextFirstExp[1];
-                zmBlockPrev[0] = vNextFirstExp[2]; zeBlock[0] = vNextFirstExp[3]; zfBlock[0] = vNextFirstExp[4];
+                zmBlockCurr[0] = exp(zmFirst[i+1]);
+                ze_i0 = exp(zeFirst[i+1]);
+                zmBlockPrev[0] = exp(zmFirst[i] - log_zmMax);
+                zeBlock[0] = exp(zeFirst[i] - log_zmMax);
+                zfBlock[0] = exp(zfFirst[i] - current_max);
 #elif defined(AVX2)
                 simd_float vNextFirstExp = _mm256_set_ps(
                     0.0f, 0.0f, 0.0f,
