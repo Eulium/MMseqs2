@@ -617,7 +617,7 @@ void FwBwAligner::forward() {
         //Removed remainder handling. Check needed
         for (size_t j = 0; j < colSeqLen_padding; j+= VECSIZE_FLOAT) {
             simd_float vZmForward = simdf32_load(&zm[i][j]);
-            vZmForward = simdf32_exp_fast(simdf32_sub(vZmForward, vMax_zm));
+            vZmForward = simdf32_exp(simdf32_sub(vZmForward, vMax_zm));
             vSum_exp = simdf32_add(vSum_exp, vZmForward);
         }
     }

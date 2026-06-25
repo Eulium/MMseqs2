@@ -1009,15 +1009,9 @@ static inline simd_float simdf32_pow2n(simd_float n) {
     return simdi_i2fcast(c);
 }
 
-// Robot idea
-static inline simd_float simdf32_abs(simd_float a) {
-  #ifdef AVX512
-      const __m512i mask = _mm512_set1_epi32(0x7fffffff);
-      return _mm512_castsi512_ps(_mm512_and_si512(_mm512_castps_si512(a), mask));
-  #else
-      const simd_float mask = simdi_i2fcast(simdi32_set(0x7FFFFFFF));
-      return simdf32_and(a, mask);
-  #endif
+static inline simd_float simdf32_abs(simd_float a){
+    const simd_float mask = simdi_i2fcast(simdi32_set(0x7FFFFFFF));
+    return simdf32_and(a, mask);
 }
 
 static inline simd_int simdi32_is_finite(simd_float a) {
@@ -1079,34 +1073,6 @@ static inline simd_float simdf32_exp(simd_float x_init) {
     #endif
     return z;
 }
-
-#ifdef AVX512
-  static inline simd_float simdf32_exp_fast(simd_float x_init) {
-      const simd_float P0 = simdf32_set(1.0f / 2.0f);
-      const simd_float P1 = simdf32_set(1.0f / 6.0f);
-      const simd_float P2 = simdf32_set(1.0f / 24.0f);
-      const simd_float P3 = simdf32_set(1.0f / 120.0f);
-      const simd_float P4 = simdf32_set(1.0f / 720.0f);
-      const simd_float P5 = simdf32_set(1.0f / 5040.0f);
-
-      const simd_float negLN2_HI = simdf32_set(-0.693359375f);
-      const simd_float negLN2_LO = simdf32_set(2.12194440e-4f);
-      const simd_float VM_LOG2E = simdf32_set(1.44269504088896340736f);
-
-      simd_float x = x_init;
-      simd_float r = simdf32_round(simdf32_mul(x_init, VM_LOG2E));
-
-      x = simdf32_fmadd(r, negLN2_HI, x);
-      x = simdf32_fmadd(r, negLN2_LO, x);
-
-      simd_float x2 = simdf32_mul(x, x);
-      simd_float z = polynomial_5(x, P0, P1, P2, P3, P4, P5);
-      z = simdf32_fmadd(z, x2, x);
-
-      simd_float n2 = simdf32_pow2n(r);
-      return simdf32_fmadd(z, n2, n2);
-  }
-  #endif
 
 #ifdef AVX512
 static inline simd_float simdf32_log(simd_float x_init) {
