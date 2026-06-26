@@ -353,7 +353,7 @@ void FwBwAligner::initScoreMatrix(float** inputScoreMatrix, int* gaps) {
     rowSeqLen = gaps[1]-gaps[0]; colSeqLen = gaps[3]-gaps[2]; //row=tlen, col=qlen
     colSeqLen_padding = ((colSeqLen + VECSIZE_FLOAT - 1) / VECSIZE_FLOAT) * VECSIZE_FLOAT; //colpadding
     blocks = (colSeqLen / length) + (colSeqLen % length != 0);
-    simd_float vTemp = simdf32_div(simdf32_set(1.0f), simdf32_set(temperature));
+    simd_float vTemp = simdf32_set(temperature);
     if (colSeqLen > colsCapacity) {
         size_t newColsCapacity = ((colSeqLen + length-1)/length)* length;
         free(scoreForward); scoreForward = malloc_matrix<float>(rowsCapacity, newColsCapacity);
@@ -363,7 +363,7 @@ void FwBwAligner::initScoreMatrix(float** inputScoreMatrix, int* gaps) {
     for (size_t i = 0; i < rowSeqLen; ++i){
         for (size_t j = 0; j < colEndPos; j+=VECSIZE_FLOAT) {
             simd_float vScoreForward = simdf32_loadu(&inputScoreMatrix[i+gaps[0]][j+gaps[2]]);
-            vScoreForward = simdf32_mul(vScoreForward, vTemp);
+            vScoreForward = simdf32_div(vScoreForward, vTemp);
             simdf32_store(&scoreForward[i][j], vScoreForward);
         }
         for(size_t j = colEndPos; j < colSeqLen; ++j){
@@ -467,7 +467,6 @@ void FwBwAligner::forward() {
             }
             zmMaxRowBlock = simdf32_hmax(vZmax_tmp);
             vZmMaxRowBlock = simdf32_set(zmMaxRowBlock);
-            simd_float vInvZmMaxRowBlock = simdf32_div(simdf32_set(1.0f), vZmMaxRowBlock);
 
             // ZF calculation 
             for (size_t j = 1; j <= cols; j += VECSIZE_FLOAT) {
@@ -477,7 +476,7 @@ void FwBwAligner::forward() {
                                         simdf32_mul(vZmPrev, simdf32_set(exp_go)),
                                         simdf32_mul(vZf, simdf32_set(exp_ge))
                                         );
-                vZfUpdate = simdf32_mul(vZfUpdate, vInvZmMaxRowBlock);
+                vZfUpdate = simdf32_div(vZfUpdate, vZmMaxRowBlock);
                 simdf32_storeu(&zfBlock[j], vZfUpdate);
             }
             for (size_t j = 0; j < cols; j += VECSIZE_FLOAT) { 
@@ -494,7 +493,7 @@ void FwBwAligner::forward() {
                                         simdf32_mul(vZeI0, vExp_ge_arr)
                                         );
                 // simd_float vZeUpdate = simdf32_fmadd(vZeI0, vExp_ge_arr, simdf32_div(vCumsumZm, vWj));
-                vZeUpdate = simdf32_mul(vZeUpdate, vInvZmMaxRowBlock);
+                vZeUpdate = simdf32_div(vZeUpdate, vZmMaxRowBlock);
                 simdf32_storeu(&zeBlock[j+1], vZeUpdate);
             }
 
@@ -503,7 +502,7 @@ void FwBwAligner::forward() {
             simd_float vCurrMax = simdf32_set(current_max);
             for (size_t j = 1; j <= cols; j += VECSIZE_FLOAT){
                 simd_float vZmCurr = simdf32_loadu(&zmBlockCurr[j]);
-                vZmCurr = simdf32_mul(vZmCurr, vInvZmMaxRowBlock);
+                vZmCurr = simdf32_div(vZmCurr, vZmMaxRowBlock);
                 simdf32_storeu(&zmBlockCurr[j], vZmCurr);
                 vZmCurr = simdf32_add(simdf32_log(vZmCurr), vCurrMax);
                 vMax_zm = simdf32_max(vMax_zm, vZmCurr);
@@ -694,7 +693,6 @@ void FwBwAligner::backward()  {
             }
             zmMaxRowBlock = simdf32_hmax(vZmax_tmp);
             vZmMaxRowBlock = simdf32_set(zmMaxRowBlock);
-            simd_float vInvZmMaxRowBlock = simdf32_div(simdf32_set(1.0f), vZmMaxRowBlock);
 
             // ZF calculation 
             for (size_t j = 1; j <= cols; j += VECSIZE_FLOAT) {
@@ -704,7 +702,7 @@ void FwBwAligner::backward()  {
                                         simdf32_mul(vZmPrev, simdf32_set(exp_go)),
                                         simdf32_mul(vZf, simdf32_set(exp_ge))
                                         );
-                vZfUpdate = simdf32_mul(vZfUpdate, vInvZmMaxRowBlock);
+                vZfUpdate = simdf32_div(vZfUpdate, vZmMaxRowBlock);
                 simdf32_storeu(&zfBlock[j], vZfUpdate);
             }
             for (size_t j = 0; j < cols; j += VECSIZE_FLOAT) { 
@@ -720,7 +718,7 @@ void FwBwAligner::backward()  {
                                         simdf32_div(vCumsumZm, vWj),
                                         simdf32_mul(vZeI0, vExp_ge_arr)
                                         );
-                vZeUpdate = simdf32_mul(vZeUpdate, vInvZmMaxRowBlock);
+                vZeUpdate = simdf32_div(vZeUpdate, vZmMaxRowBlock);
                 simdf32_storeu(&zeBlock[j+1], vZeUpdate);
             }
 
@@ -733,7 +731,7 @@ void FwBwAligner::backward()  {
                 forwardBlockStart -= vecsize_float;
                 size_t simd_index = forwardBlockStart;
                 simd_float vZmCurr = simdf32_loadu(&zmBlockCurr[j]);
-                vZmCurr = simdf32_mul(vZmCurr, vInvZmMaxRowBlock);
+                vZmCurr = simdf32_div(vZmCurr, vZmMaxRowBlock);
                 simdf32_storeu(&zmBlockCurr[j], vZmCurr);
                 vZmCurr = simdf32_add(simdf32_log(vZmCurr), vCurrMax);
 
@@ -748,7 +746,7 @@ void FwBwAligner::backward()  {
             if (memcpy_cols != length) {
                 size_t remainder = memcpy_cols % VECSIZE_FLOAT;
                 simd_float vZmCurr = simdf32_loadu(&zmBlockCurr[adjusted_memcpycols+1]);
-                vZmCurr = simdf32_mul(vZmCurr, vInvZmMaxRowBlock);
+                vZmCurr = simdf32_div(vZmCurr, vZmMaxRowBlock);
                 simdf32_storeu(&zmBlockCurr[adjusted_memcpycols+1], vZmCurr);
                 vZmCurr = simdf32_add(simdf32_log(vZmCurr), simdf32_set(current_max));
                 for (size_t k = 0; k < remainder; ++k) {
