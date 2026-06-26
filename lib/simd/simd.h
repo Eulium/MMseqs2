@@ -1009,9 +1009,15 @@ static inline simd_float simdf32_pow2n(simd_float n) {
     return simdi_i2fcast(c);
 }
 
-static inline simd_float simdf32_abs(simd_float a){
-    const simd_float mask = simdi_i2fcast(simdi32_set(0x7FFFFFFF));
-    return simdf32_and(a, mask);
+// Robot idea, seems to make FwBw faster on AVX512
+static inline simd_float simdf32_abs(simd_float a) {
+  #ifdef AVX512
+      const __m512i mask = _mm512_set1_epi32(0x7fffffff);
+      return _mm512_castsi512_ps(_mm512_and_si512(_mm512_castps_si512(a), mask));
+  #else
+      const simd_float mask = simdi_i2fcast(simdi32_set(0x7FFFFFFF));
+      return simdf32_and(a, mask);
+  #endif
 }
 
 static inline simd_int simdi32_is_finite(simd_float a) {
