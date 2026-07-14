@@ -448,7 +448,7 @@ void UngappedAlignment::scoreDiagonalAndUpdateHits(const char * queryProfile,
 
     if(queryLen >= 32768){
         for (size_t hitIdx = 0; hitIdx < hitSize; hitIdx++) {
-            const unsigned int seqId = hits[hitIdx]->id;
+            const DBLocalId seqId = hits[hitIdx]->id;
             unsigned int dbLen;
             const unsigned char *dbPtr = getDbSeq<HasRemap>(seqId, dbLen);
             std::pair<const unsigned char *, const unsigned int> dbSeq = std::make_pair(dbPtr, dbLen);
@@ -528,7 +528,7 @@ void UngappedAlignment::scoreDiagonalAndUpdateHits(const char * queryProfile,
         }
     }else {
         for (size_t hitIdx = 0; hitIdx < hitSize; hitIdx++) {
-            const unsigned int seqId = hits[hitIdx]->id;
+            const DBLocalId seqId = hits[hitIdx]->id;
             unsigned int dbLen;
             const unsigned char *dbPtr = getDbSeq<HasRemap>(seqId, dbLen);
             std::pair<const unsigned char *, const unsigned int> dbSeq = std::make_pair(dbPtr, dbLen);
@@ -625,7 +625,7 @@ void UngappedAlignment::extractScores(unsigned int *score_arr, simd_int score) {
 
 
 template <bool HasRemap>
-inline const unsigned char* UngappedAlignment::getDbSeq(unsigned int seqId, unsigned int &outLen, unsigned int bufferOffset) {
+inline const unsigned char* UngappedAlignment::getDbSeq(DBLocalId seqId, unsigned int &outLen, unsigned int bufferOffset) {
     std::pair<const unsigned char *, const unsigned int> raw = sequenceLookup->getSequence(seqId);
     outLen = raw.second;
     if (HasRemap) {
@@ -716,4 +716,3 @@ int UngappedAlignment::scoreSingleSequence(std::pair<const unsigned char *, cons
         return computeSingelSequenceScores(queryProfile,queryLen ,dbSeq, static_cast<short>(diagonal), minDistToDiagonal);
     }
 }
-
