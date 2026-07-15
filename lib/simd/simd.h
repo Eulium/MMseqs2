@@ -49,7 +49,7 @@
 #define AVX512
 #endif
 
-#if defined(SIMDE_X86_AVX2_NATIVE)
+#if defined(SIMDE_X86_AVX2_NATIVE) && !defined(AVX512)
 #define AVX2
 #endif
 
@@ -216,11 +216,6 @@ inline __m512 simdf32_le_avx512(__m512 a, __m512 b) {
     return _mm512_castsi512_ps(_mm512_maskz_set1_epi32(mask, -1));
 }
 
-inline __m512 simdf32_cmp_avx512(__m512 a, __m512 b, const int imm8) {
-    __mmask16 mask = _mm512_cmp_ps_mask(a, b, imm8);
-    return _mm512_castsi512_ps(_mm512_maskz_set1_epi32(mask, -1));
-}
-
 // AI Idea to get around z in _mm512_mask_blend_ps(z,x,y) beeing __mmask16 
 inline __mmask16 simdf32_mask_from_ps_avx512(__m512 m) {
     return _mm512_movepi32_mask(_mm512_castps_si512(m));
@@ -301,7 +296,7 @@ typedef __m512  simd_float;
 #define simdf32_eq(x,y)     simdf32_eq_avx512(x,y)
 #define simdf32_lt(x,y)     simdf32_gt_avx512(y,x)
 #define simdf32_le(x,y)     simdf32_le_avx512(x,y)
-#define simdf32_cmp(x,y,z)  simdf32_cmp_avx512(x, y, z)
+#define simdf32_cmp(x,y,z)  _mm512_castsi512_ps(_mm512_maskz_set1_epi32(_mm512_cmp_ps_mask(x, y, z), -1))
 #define simdf32_or(x,y)     _mm512_or_ps(x,y)
 #define simdf32_and(x,y)    _mm512_and_ps(x,y)
 #define simdf32_andnot(x,y) _mm512_andnot_ps(x,y)
