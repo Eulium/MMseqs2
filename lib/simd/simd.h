@@ -49,9 +49,9 @@
 #define AVX512
 #endif
 
-// #if defined(AVX512) || defined(SIMDE_X86_AVX2_NATIVE)
-// #define AVX2
-// #endif
+#if defined(SIMDE_X86_AVX2_NATIVE)
+#define AVX2
+#endif
 
 #ifdef AVX512
 // FIXME: Remove after updating SIMDe, headers are buggy in this versions
