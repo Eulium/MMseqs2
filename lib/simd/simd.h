@@ -53,6 +53,21 @@
 #define AVX2
 #endif
 
+// P3: a translation unit may define MMSEQS_FORCE_SIMD256 (before including simd.h) to run
+// at 256-bit vector width WITH AVX512VL mask features even inside an AVX512 build. Used by
+// StripedSmithWaterman: 256-bit avoids the 512-bit striped-SW penalties (halved segment
+// count amortizing per-column overhead, the cross-512-bit vpermt2 shift) while AVX512VL
+// still provides k-register lazy-F early-exit (vpcmp->kortest) that plain AVX2 lacks.
+// Safe per-TU because StripedSmithWaterman.h exposes no SIMD types across TU boundaries.
+#if defined(AVX512) && defined(MMSEQS_FORCE_SIMD256)
+#define SIMDE_X86_AVX512_CMPLE_H
+#define SIMDE_X86_AVX512_CMPGE_H
+#include <simde/x86/avx512.h>   // provides 256-bit AVX512VL mask intrinsics
+#undef AVX512
+#define AVX2
+#define MMSEQS_AVX512VL_MASKS
+#endif
+
 #ifdef AVX512
 // FIXME: Remove after updating SIMDe, headers are buggy in this versions
 #define SIMDE_X86_AVX512_CMPLE_H
@@ -885,24 +900,30 @@ typedef uint32_t            movemask_max_t;
 // On AVX2/SSE they expand to exactly the previous idiom (unchanged codegen).
 // ---------------------------------------------------------------------------
 static inline bool simdi16_gt_any(const simd_int a, const simd_int b) {
-#ifdef AVX512
+#if defined(AVX512)
     return _mm512_cmp_epi16_mask(a, b, _MM_CMPINT_NLE) != 0;
+#elif defined(MMSEQS_AVX512VL_MASKS)   // P3: 256-bit width, AVX512VL k-register test
+    return _mm256_cmp_epi16_mask(a, b, _MM_CMPINT_NLE) != 0;
 #else
     return simd_any(simdi16_gt(a, b));
 #endif
 }
 
 static inline bool simdi32_gt_any(const simd_int a, const simd_int b) {
-#ifdef AVX512
+#if defined(AVX512)
     return _mm512_cmp_epi32_mask(a, b, _MM_CMPINT_NLE) != 0;
+#elif defined(MMSEQS_AVX512VL_MASKS)
+    return _mm256_cmp_epi32_mask(a, b, _MM_CMPINT_NLE) != 0;
 #else
     return simdi8_movemask(simdi32_gt(a, b)) != 0;
 #endif
 }
 
 static inline bool simdi32_eq_all(const simd_int a, const simd_int b) {
-#ifdef AVX512
+#if defined(AVX512)
     return _mm512_cmp_epi32_mask(a, b, _MM_CMPINT_EQ) == 0xFFFF;
+#elif defined(MMSEQS_AVX512VL_MASKS)   // 8 int32 lanes -> __mmask8 all-set = 0xFF
+    return _mm256_cmp_epi32_mask(a, b, _MM_CMPINT_EQ) == 0xFF;
 #else
     return (movemask_max_t) simdi8_movemask(simdi32_eq(a, b)) == SIMD_MOVEMASK_MAX;
 #endif
