@@ -58,7 +58,11 @@ build(){  # name  <extra cmake args...>
 build avx2         -DHAVE_AVX2=1
 build avx512       -DHAVE_AVX512=1 -DCMAKE_CXX_FLAGS="-mavx512dq -mavx512vl" -DCMAKE_C_FLAGS="-mavx512dq -mavx512vl"
 build avx512_noP3  -DHAVE_AVX512=1 -DCMAKE_CXX_FLAGS="-mavx512dq -mavx512vl -DMMSEQS_NO_SIMD256" -DCMAKE_C_FLAGS="-mavx512dq -mavx512vl"
+# P4 (ungapped-scan prefetch, opt-in): avx512 + P3 + prefetch. Its effect shows in `search`
+# (the ungapped diagonal scan runs inside prefilter); compare avx512_pf vs avx512 on search.
+build avx512_pf    -DHAVE_AVX512=1 -DCMAKE_CXX_FLAGS="-mavx512dq -mavx512vl -DMMSEQS_UNGAPPED_PREFETCH" -DCMAKE_C_FLAGS="-mavx512dq -mavx512vl"
 MM_AVX2="$WORK/build_avx2/src/mmseqs"
+VARIANTS="avx2 avx512 avx512_noP3 avx512_pf"
 
 # ---- 2. dataset -------------------------------------------------------------
 say "2. Dataset (UniProt Swiss-Prot target + $QUERY_N-query sample)"
@@ -89,7 +93,7 @@ timed(){ # variant bench param  cmd...
   printf "  %-13s %-6s %-4s r%s  %8ss\n" "$v" "$b" "$p" "$rep" "$w"
 }
 say "3. Runtime benchmarks (${THREADS} threads, ${REPEATS} reps; fwbw ${FWBW_REPS} reps)"
-for v in avx2 avx512 avx512_noP3; do
+for v in $VARIANTS; do
   MM="$WORK/build_$v/src/mmseqs"
   for r in $(seq 1 "$REPEATS"); do
     rm -rf "$WORK/ts"; timed "$v" search - "$r" "$MM" search "$DATA/queryDB" "$DATA/targetDB" "$WORK/o_s_$v" "$WORK/ts" -s "$SENS" --threads "$THREADS" -v1; rm -rf "$WORK/o_s_$v"* "$WORK/ts"
@@ -190,15 +194,16 @@ from collections import defaultdict
 d=defaultdict(list)
 for r in rows: d[(r['bench'],r['param'],r['variant'])].append(float(r['wall_s']))
 benches=sorted({(r['bench'],r['param']) for r in rows})
-print(f"{'bench':<10}{'param':<6}{'avx2':>9}{'avx512':>9}{'avx512_noP3':>13}{'  512/2':>8}{' P3gain':>8}")
+print(f"{'bench':<10}{'param':<6}{'avx2':>9}{'avx512':>9}{'noP3':>9}{'pf(P4)':>9}{'  512/2':>8}{' P3g':>7}{' P4g':>7}")
 for b,p in benches:
-    m={v:st.median(d[(b,p,v)]) for v in ('avx2','avx512','avx512_noP3') if (b,p,v) in d}
+    m={v:st.median(d[(b,p,v)]) for v in ('avx2','avx512','avx512_noP3','avx512_pf') if (b,p,v) in d}
     if 'avx2' not in m: continue
-    a2=m['avx2']; a5=m.get('avx512'); n3=m.get('avx512_noP3')
+    a2=m['avx2']; a5=m.get('avx512'); n3=m.get('avx512_noP3'); pf=m.get('avx512_pf')
     sp = f"{a2/a5:.3f}x" if a5 else "-"
-    p3 = f"{n3/a5:.3f}x" if (a5 and n3) else "-"   # P3 build vs no-P3 build (fwbw same; align shows P3 effect)
-    print(f"{b:<10}{p:<6}{a2:>9.2f}{(a5 or 0):>9.2f}{(n3 or 0):>13.2f}{sp:>8}{p3:>8}")
-print("\nLegend: 512/2 = AVX2/AVX512 (>1 means AVX512 faster). P3gain = noP3/P3 (>1 means P3 helped).")
+    p3 = f"{n3/a5:.3f}x" if (a5 and n3) else "-"   # noP3/P3: >1 => P3 helped (align)
+    p4 = f"{a5/pf:.3f}x" if (a5 and pf) else "-"   # P3/(P3+prefetch): >1 => P4 helped (search)
+    print(f"{b:<10}{p:<6}{a2:>9.2f}{(a5 or 0):>9.2f}{(n3 or 0):>9.2f}{(pf or 0):>9.2f}{sp:>8}{p3:>7}{p4:>7}")
+print("\nLegend: 512/2=AVX2/AVX512 (>1 AVX512 faster). P3g=noP3/P3 (>1 P3 helped, align). P4g=P3/pf (>1 prefetch helped, search).")
 PY
 echo
 echo "Raw: $CSV | perf: $RES/perf* | asm+mca: $ASM | logs: $LOG"

@@ -3,6 +3,18 @@
 
 #include "UngappedAlignment.h"
 
+// P4 (opt-in): software prefetch for the ungapped diagonal scan. Build with
+// -DMMSEQS_UNGAPPED_PREFETCH to enable; tune distance/stride via the *_DIST / *_STRIDE macros.
+#ifdef MMSEQS_UNGAPPED_PREFETCH
+// _mm_prefetch / _MM_HINT_T0 come transitively from simd.h (SIMDe-aliased on non-x86).
+#ifndef MMSEQS_UNGAPPED_PREFETCH_DIST
+#define MMSEQS_UNGAPPED_PREFETCH_DIST 256   // bytes ahead to prefetch each db stream
+#endif
+#ifndef MMSEQS_UNGAPPED_PREFETCH_STRIDE
+#define MMSEQS_UNGAPPED_PREFETCH_STRIDE 32  // re-issue prefetches every N positions (power of 2)
+#endif
+#endif
+
 UngappedAlignment::UngappedAlignment(const unsigned int maxSeqLen,
                                      BaseMatrix *substitutionMatrix, SequenceLookup *sequenceLookup,
                                      const unsigned char *dbRemap)
@@ -67,6 +79,16 @@ void UngappedAlignment::unrolledDiagonalScoring(const char * profile,
     simd_int score = simdi32_set(0);
 
     for(unsigned int pos = 0; pos < seqLen[0]; pos++){
+#ifdef MMSEQS_UNGAPPED_PREFETCH
+        // P4 (opt-in): software-prefetch the DIAGONALBINSIZE per-diagonal db streams ahead of
+        // use, to hide the latency of scanning many independent sequence streams at once.
+        // Issued once per cache line; prefetching past a sequence end is harmless (never faults).
+        if ((pos & (MMSEQS_UNGAPPED_PREFETCH_STRIDE - 1)) == 0) {
+            for (unsigned int pk = 0; pk < DIAGONALBINSIZE; ++pk) {
+                _mm_prefetch((const char *)(dbSeq[pk] + pos + MMSEQS_UNGAPPED_PREFETCH_DIST), _MM_HINT_T0);
+            }
+        }
+#endif
         const char * profileColumn = (profile + pos * T);
         int subScore0 =  profileColumn[dbSeq[0][pos]];
         int subScore1 =  profileColumn[dbSeq[1][pos]];
