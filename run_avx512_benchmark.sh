@@ -12,24 +12,51 @@
 # 512-bit striped-SW penalties). Toggle with -DMMSEQS_NO_SIMD256. This script
 # builds "avx512" (P3 on) and "avx512_noP3" (P3 off) so you can measure P3 directly.
 #
-# Usage:  ./run_avx512_benchmark.sh            # full run
-#         WORK=/data/bench ./run_avx512_benchmark.sh
+# Config is via environment variables (SLURM-friendly):
+#   MMSEQS_DIR  path to the MMseqs2 source tree (the repo; may be anywhere)   [required*]
+#   SCRATCH     fast work filesystem; WORK defaults to $SCRATCH/mmseqs_avx_bench
+#   WORK        override the working dir (builds/data/results) explicitly
+#   THREADS/JOBS default to $SLURM_CPUS_PER_TASK when set
+#   REPEATS FWBW_REPS SENS QUERY_N MCPU SPROT_URL  (see defaults below)
+#  *REPO/MMSEQS_DIR falls back to this script's own dir only if that dir is a repo.
+#
+# Standalone:  MMSEQS_DIR=~/src/MMseqs2 ./run_avx512_benchmark.sh
+# SLURM (sbatch):
+#   #!/bin/bash
+#   #SBATCH -c 32
+#   #SBATCH --constraint=avx512          # request an AVX512 node
+#   #SBATCH -t 04:00:00
+#   export MMSEQS_DIR=$HOME/src/MMseqs2   # repo, separate from scratch
+#   srun bash "$MMSEQS_DIR/run_avx512_benchmark.sh"   # WORK auto = $SCRATCH/mmseqs_avx_bench
+#
 # Requires: gcc/g++, cmake, make, cargo/rustc (>=1.78 for block-aligner), curl,
-#           awk, python3, perf, llvm-mca (clang optional). Uses sudo only to relax
-#           perf_event_paranoid (skipped if unavailable).
+#           awk, python3, perf, llvm-mca (clang optional). sudo only (optional) to
+#           relax perf_event_paranoid; skipped if unavailable (common on clusters).
 # =============================================================================
 set -euo pipefail
 
-REPO="${REPO:-$(cd "$(dirname "$0")" && pwd)}"     # this repo (run from its root)
-WORK="${WORK:-$HOME/mmseqs_avx_bench}"
-THREADS="${THREADS:-16}"
+# --- repo location: explicit env (MMSEQS_DIR or REPO), else this script's dir ---
+_self_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="${MMSEQS_DIR:-${REPO:-$_self_dir}}"
+# --- working dir: prefer $SCRATCH (HPC), then $WORK, then $HOME ---
+WORK="${WORK:-${SCRATCH:+$SCRATCH/mmseqs_avx_bench}}"; WORK="${WORK:-$HOME/mmseqs_avx_bench}"
+THREADS="${THREADS:-${SLURM_CPUS_PER_TASK:-16}}"
+JOBS="${JOBS:-${SLURM_CPUS_PER_TASK:-$(nproc)}}"
 REPEATS="${REPEATS:-5}"
 FWBW_REPS="${FWBW_REPS:-3}"
 SENS="${SENS:-7.5}"
 QUERY_N="${QUERY_N:-5000}"
-JOBS="${JOBS:-$(nproc)}"
 MCPU="${MCPU:-native}"                              # llvm-mca / -march target
 SPROT_URL="${SPROT_URL:-https://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz}"
+
+# --- validate ---
+[ -f "$REPO/CMakeLists.txt" ] && [ -f "$REPO/src/mmseqs.cpp" ] || {
+  echo "ERROR: MMSEQS_DIR does not point to an MMseqs2 source tree: '$REPO'"
+  echo "       set MMSEQS_DIR=/path/to/MMseqs2 (repo may live anywhere, separate from \$SCRATCH)"; exit 1; }
+mkdir -p "$WORK" 2>/dev/null || { echo "ERROR: cannot create WORK='$WORK' (set \$SCRATCH or \$WORK)"; exit 1; }
+[ -w "$WORK" ] || { echo "ERROR: WORK not writable: '$WORK'"; exit 1; }
+REPO="$(cd "$REPO" && pwd)"; WORK="$(cd "$WORK" && pwd)"   # normalize to absolute
+echo "REPO=$REPO"; echo "WORK=$WORK  THREADS=$THREADS JOBS=$JOBS"
 
 DATA="$WORK/data"; RES="$WORK/results"; LOG="$WORK/logs"; ASM="$WORK/asm"
 mkdir -p "$DATA" "$RES" "$LOG" "$ASM"
