@@ -418,11 +418,21 @@ uint8_t simd_hmax8_sse(const __m128i buffer);
 bool simd_any_sse(const __m128i buffer);
 
 inline uint32_t simd_hmax32_avx(const __m256i buffer) {
-    const __m128i abcd = _mm256_castsi256_si128(buffer);
-    const uint32_t first = simd_hmax32_sse(abcd);
-    const __m128i efgh = _mm256_extracti128_si256(buffer, 1);
-    const uint32_t second = simd_hmax32_sse(efgh);
-    return std::max(first, second);
+    #if defined(MMSEQS_AVX512VL_MASKS)
+        const __m256i shuffle1 = _mm256_shuffle_epi32(buffer, (_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i max1 = _mm256_max_epi32(buffer, shuffle1);
+        const __m256i shuffle2 = _mm256_shuffle_epi32(max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
+        const __m256i max2 = _mm256_max_epi32(max1, shuffle2);
+        const __m256i shuffle3 = _mm256_shuffle_i32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i max3 = _mm256_max_epi32(max2, shuffle3);
+        return (uint32_t)_mm256_cvtsi256_si32(max3);
+    #else
+        const __m128i abcd = _mm256_castsi256_si128(buffer);
+        const uint32_t first = simd_hmax32_sse(abcd);
+        const __m128i efgh = _mm256_extracti128_si256(buffer, 1);
+        const uint32_t second = simd_hmax32_sse(efgh);
+        return std::max(first, second);
+    #endif
 }
 
 inline uint16_t simd_hmax16_avx(const __m256i buffer) {
@@ -472,11 +482,22 @@ inline bool simd_eq_all_avx(const __m256i a, const __m256i b) {
 float simdf32_hmax_sse(const __m128 buffer);
 
 inline float simdf32_hmax_avx(const __m256 buffer) {
-    const __m128 lower = _mm256_castps256_ps128(buffer); // Lower 128 bits
-    const __m128 upper = _mm256_extractf128_ps(buffer, 1); // Upper 128 bits
-    const float lower_max = simdf32_hmax_sse(lower);
-    const float upper_max = simdf32_hmax_sse(upper);
-    return std::max(lower_max, upper_max);
+    #if defined(MMSEQS_AVX512VL_MASKS)
+        const __m256 shuffle1 = _mm256_shuffle_ps(buffer, buffer,(_MM_PERM_ENUM)_MM_SHUFFLE(1, 0, 3, 2));
+        const __m256 max1 = _mm256_max_ps(buffer, shuffle1);
+        const __m256 shuffle2 = _mm256_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
+        const __m256 max2 = _mm256_max_ps(max1, shuffle2);
+        const __m256 shuffle3 = _mm256_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256 max3 = _mm256_max_ps(max2, shuffle3);
+        // const __m128 max128 = _mm512_castps512_ps128(max4);
+        return _mm256_cvtss_f32(max3);
+    #else
+        const __m128 lower = _mm256_castps256_ps128(buffer); // Lower 128 bits
+        const __m128 upper = _mm256_extractf128_ps(buffer, 1); // Upper 128 bits
+        const float lower_max = simdf32_hmax_sse(lower);
+        const float upper_max = simdf32_hmax_sse(upper);
+        return std::max(lower_max, upper_max);
+    #endif
 }
 __m128 simdf32_reverse_sse(const __m128 buffer);
 
@@ -508,7 +529,7 @@ inline __m256i _mm256_shift_left(__m256i a) {
 
 inline __m256i simdi8_shiftl_4(__m256i a) {
     #if defined(MMSEQS_AVX512VL_MASKS)
-    eturn _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 4)/ 4);
+    return _mm256_alignr_epi32(a, _mm256_setzero_si256(), (64 - 4)/ 4);
     #else 
     __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
     return _mm256_alignr_epi8(a,mask,16-4);
@@ -517,7 +538,7 @@ inline __m256i simdi8_shiftl_4(__m256i a) {
 
 inline __m256i simdi8_shiftl_8(__m256i a) {
     #if defined(MMSEQS_AVX512VL_MASKS)
-    return _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 8)/ 4);
+    return _mm256_alignr_epi32(a, _mm256_setzero_si256(), (64 - 8)/ 4);
     #else 
     __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
     return _mm256_alignr_epi8(a,mask,16-8);
@@ -526,7 +547,7 @@ inline __m256i simdi8_shiftl_8(__m256i a) {
 
 inline __m256i simdi8_shiftl_8(__m256i a) {
     #if defined(MMSEQS_AVX512VL_MASKS)
-    return _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 16)/ 4);
+    return _mm256_alignr_epi32(a, _mm256_setzero_si256(), (64 - 16)/ 4);
     #else 
     __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
     return _mm256_alignr_epi8(a,mask,16-16);
