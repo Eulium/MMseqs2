@@ -506,6 +506,34 @@ inline __m256i _mm256_shift_left(__m256i a) {
     return _mm256_alignr_epi8(a,mask,16-N);
 }
 
+inline __m256i simdi8_shiftl_4(__m256i a) {
+    #if defined(MMSEQS_AVX512VL_MASKS)
+    eturn _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 4)/ 4);
+    #else 
+    __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
+    return _mm256_alignr_epi8(a,mask,16-4);
+    #endif
+}
+
+inline __m256i simdi8_shiftl_8(__m256i a) {
+    #if defined(MMSEQS_AVX512VL_MASKS)
+    return _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 8)/ 4);
+    #else 
+    __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
+    return _mm256_alignr_epi8(a,mask,16-8);
+    #endif
+}
+
+inline __m256i simdi8_shiftl_8(__m256i a) {
+    #if defined(MMSEQS_AVX512VL_MASKS)
+    return _mm256_alignr_epi32(a, _mm256_setzero_si512(), (64 - 16)/ 4);
+    #else 
+    __m256i mask = _mm256_permute2x128_si256(a, a, _MM_SHUFFLE(0,0,3,0) );
+    return _mm256_alignr_epi8(a,mask,16-16);
+    #endif
+}
+
+
 inline unsigned short extract_epi16(__m256i v, int pos) {
     switch(pos){
         case 0: return _mm256_extract_epi16(v, 0);
