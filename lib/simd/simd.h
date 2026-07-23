@@ -423,7 +423,7 @@ inline uint32_t simd_hmax32_avx(const __m256i buffer) {
         const __m256i max1 = _mm256_max_epi32(buffer, shuffle1);
         const __m256i shuffle2 = _mm256_shuffle_epi32(max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
         const __m256i max2 = _mm256_max_epi32(max1, shuffle2);
-        const __m256i shuffle3 = _mm256_shuffle_i32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256i shuffle3 = _mm256_shuffle_i32x4(max2, max2, 0b01);
         const __m256i max3 = _mm256_max_epi32(max2, shuffle3);
         return (uint32_t)_mm256_cvtsi256_si32(max3);
     #else
@@ -487,7 +487,7 @@ inline float simdf32_hmax_avx(const __m256 buffer) {
         const __m256 max1 = _mm256_max_ps(buffer, shuffle1);
         const __m256 shuffle2 = _mm256_shuffle_ps(max1, max1, (_MM_PERM_ENUM)_MM_SHUFFLE(2, 3, 0, 1));
         const __m256 max2 = _mm256_max_ps(max1, shuffle2);
-        const __m256 shuffle3 = _mm256_shuffle_f32x4(max2, max2, _MM_SHUFFLE(1, 0, 3, 2));
+        const __m256 shuffle3 = _mm256_shuffle_f32x4(max2, max2, 0b01);
         const __m256 max3 = _mm256_max_ps(max2, shuffle3);
         // const __m128 max128 = _mm512_castps512_ps128(max4);
         return _mm256_cvtss_f32(max3);
@@ -545,7 +545,7 @@ inline __m256i simdi8_shiftl_8(__m256i a) {
     #endif
 }
 
-inline __m256i simdi8_shiftl_8(__m256i a) {
+inline __m256i simdi8_shiftl_16(__m256i a) {
     #if defined(MMSEQS_AVX512VL_MASKS)
     return _mm256_alignr_epi32(a, _mm256_setzero_si256(), (64 - 16)/ 4);
     #else 

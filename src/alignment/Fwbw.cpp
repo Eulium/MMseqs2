@@ -1,3 +1,7 @@
+#ifndef MMSEQS_NO_SIMD256
+#define MMSEQS_FORCE_SIMD256 1
+#endif
+
 #include "Fwbw.h"
 #include "Debug.h"
 #include "DBReader.h"
