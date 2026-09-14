@@ -75,14 +75,6 @@ void rescoreResultByBacktrace(Matcher::result_t &result, Sequence &qSeq, Sequenc
     result.seqId = identities;
 }
 
-static bool compareHitsByKeyScore(const Matcher::result_t &first, const Matcher::result_t &second) {
-    if (first.score > second.score)
-        return true;
-    if (second.score > first.score)
-        return false;
-    return false;
-}
-
 int expandaln(int argc, const char **argv, const Command& command, bool returnAlnRes) {
     Parameters &par = Parameters::getInstance();
     // default for expand2profile to filter MSA
@@ -275,6 +267,7 @@ int expandaln(int argc, const char **argv, const Command& command, bool returnAl
                 Matcher::readAlignmentResults(resultsBc, resultBcReader->getData(bResId, thread_idx), false);
                 if (filterBc) {
                     bool hasRep = false;
+                    size_t repIdx = 0;
                     for (size_t k = 0; k < resultsBc.size(); ++k) {
                         Matcher::result_t &resultBc = resultsBc[k];
                         if (resultBc.backtrace.size() == 0) {
@@ -290,6 +283,7 @@ int expandaln(int argc, const char **argv, const Command& command, bool returnAl
                             }
                             bSeq->mapSequence(bSeqId, bSeqKey, cReader->getData(bSeqId, thread_idx), cReader->getSeqLen(bSeqId));
                             hasRep = true;
+                            repIdx = k;
                         } else {
                             DBKeyType cSeqKey = resultBc.dbKey;
                             size_t cSeqId = cReader->getId(cSeqKey);
@@ -302,8 +296,8 @@ int expandaln(int argc, const char **argv, const Command& command, bool returnAl
                         }
                     }
                     if (hasRep == true) {
-                        Matcher::result_t query = *(resultsBc.begin());
-                        resultsBc.erase(resultsBc.begin());
+                        Matcher::result_t query = resultsBc[repIdx];
+                        resultsBc.erase(resultsBc.begin() + repIdx);
                         MultipleAlignment::MSAResult res = aligner->computeMSA(bSeq, subSeqSet, resultsBc, true);
                         filter->filter(res, resultsBc, (int)(par.covMSAThr * 100), qid_vec, par.qsc, (int)(par.filterMaxSeqId * 100), par.Ndiff, par.filterMinEnable);
                         resultsBc.insert(resultsBc.begin(), query);
@@ -313,8 +307,6 @@ int expandaln(int argc, const char **argv, const Command& command, bool returnAl
                     }
                     subSeqSet.clear();
                 }
-                //std::stable_sort(resultsBc.begin(), resultsBc.end(), compareHitsByKeyScore);
-
                 for (size_t k = 0; k < resultsBc.size(); ++k) {
                     Matcher::result_t &resultBc = resultsBc[k];
                     if (resultBc.backtrace.size() == 0) {

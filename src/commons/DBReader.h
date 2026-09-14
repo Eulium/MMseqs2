@@ -533,6 +533,8 @@ private:
     int dbtype;
     int compression;
     int padded;
+    // set when the DB packs two alphabets into one byte; see the note in the DBReader constructor
+    bool packedAlphabet;
     char ** compressedBuffers;
     size_t * compressedBufferSizes;
     ZSTD_DStream ** dstream;
@@ -560,5 +562,10 @@ private:
     char magicBytes;
 
 };
+
+// Defined in DBReaderSortIndex.cpp
+template<> void DBReader<std::string>::sortIndex(bool isSortedById);
+template<> void DBReader<DBKeyType>::sortIndex(bool isSortedById);
+template<> void DBReader<DBKeyType>::sortIndex(float *weights);
 
 #endif
