@@ -163,6 +163,35 @@ if (NOT (MMSEQS_ARCH STREQUAL ""))
     set(MMSEQS_CXX_FLAGS "${MMSEQS_CXX_FLAGS} ${MMSEQS_ARCH}")
 endif ()
 
+# Runtime-dispatched AVX512 kernels (gapless alignment, fwbw). Those translation units are
+# compiled with their own -m flags and are only entered when the CPU reports the features at
+# runtime, so the rest of the binary keeps its baseline instruction set. If the toolchain cannot
+# compile them the sources are dropped and MMSEQS_HAVE_AVX512_DISPATCH stays undefined, which
+# compiles the dispatch away.
+set(MMSEQS_AVX512_DISPATCH_FLAGS "" CACHE INTERNAL "")
+if (X86 OR X64)
+    include(CheckCXXSourceCompiles)
+    set(MMSEQS_AVX512_DISPATCH_FLAGS_TRY "-mavx512f -mavx512bw -mavx512dq -mavx512vl")
+    set(OLD_CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS}")
+    set(CMAKE_REQUIRED_FLAGS "${MMSEQS_AVX512_DISPATCH_FLAGS_TRY}")
+    check_cxx_source_compiles("
+        #include <immintrin.h>
+        int main() {
+            __m512i a = _mm512_set1_epi8(1);
+            a = _mm512_adds_epu8(a, a);
+            __m256i b = _mm256_maskz_set1_epi8(_mm256_cmpgt_epi8_mask(_mm512_castsi512_si256(a), _mm256_setzero_si256()), 1);
+            return _mm_cvtsi128_si32(_mm256_castsi256_si128(b));
+        }"
+        HAVE_AVX512_DISPATCH)
+    set(CMAKE_REQUIRED_FLAGS "${OLD_CMAKE_REQUIRED_FLAGS}")
+    if (HAVE_AVX512_DISPATCH)
+        set(MMSEQS_AVX512_DISPATCH_FLAGS "${MMSEQS_AVX512_DISPATCH_FLAGS_TRY}" CACHE INTERNAL "")
+        message("-- AVX512 runtime dispatch enabled")
+    else ()
+        message("-- AVX512 runtime dispatch not available with this compiler")
+    endif ()
+endif ()
+
 if (CYGWIN OR ARM OR PPC64)
     set(MMSEQS_CXX_FLAGS "${MMSEQS_CXX_FLAGS} -D_GNU_SOURCE=1")
 endif ()
