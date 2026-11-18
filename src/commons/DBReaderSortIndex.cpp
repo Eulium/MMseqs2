@@ -26,6 +26,8 @@ void DBReader<std::string>::sortIndex(bool isSortedById) {
 template<>
 void DBReader<DBKeyType>::sortIndex(float *weights) {
 
+    // the weight order needs local2id, which a lazy index does not have
+    materializeIndex();
     this->accessType=DBReader::SORT_BY_WEIGHTS;
     std::pair<size_t, float> *sortForMapping = new std::pair<size_t, float>[size];
     id2local = new DBLocalId[size];

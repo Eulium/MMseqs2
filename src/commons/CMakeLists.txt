@@ -13,6 +13,7 @@ set(commons_header_files
         commons/DBReader.h
         commons/DBWriter.h
         commons/ParquetDBWriter.h
+        commons/LazyIndex.h
         commons/IntervalArray.h
         commons/Debug.h
         commons/Domain.h
@@ -61,6 +62,7 @@ set(commons_source_files
         commons/DBReaderSortIndex.cpp
         commons/DBWriter.cpp
         commons/ParquetDBWriter.cpp
+        commons/LazyIndex.cpp
         commons/Debug.cpp
         commons/ExpressionParser.cpp
         commons/FileUtil.cpp

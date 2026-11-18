@@ -11,6 +11,7 @@
 #include <vector>
 #include <string>
 #include "IndexTypes.h"
+#include "LazyIndex.h"
 #include "Sequence.h"
 #include "Parameters.h"
 #include "FileUtil.h"
@@ -241,7 +242,9 @@ public:
             EXIT(EXIT_FAILURE);
         }
         unsigned int length;
-        if (local2id != NULL) {
+        if (lazyIndex != NULL) {
+            length=lazyIndex->get(id).length;
+        } else if (local2id != NULL) {
             length=index[local2id[id]].length;
         }else{
             length=index[id].length;
@@ -261,6 +264,9 @@ public:
             Debug(Debug::ERROR) << "Invalid database read for id=" << id << ", database index=" << indexFileName << "\n";
             Debug(Debug::ERROR) << "getEntryLen: local id (" << id << ") >= db size (" << size << ")\n";
             EXIT(EXIT_FAILURE);
+        }
+        if (lazyIndex != NULL) {
+            return lazyIndex->get(id).length;
         }
         if (local2id != NULL) {
             return index[local2id[id]].length;
@@ -379,11 +385,14 @@ public:
     size_t getDataOffset(T i);
 
 
+    // the index as array; a lazy index (see LazyIndex.h) is read completely first
     Index* getIndex() {
+        materializeIndex();
         return index;
     }
 
     Index* getIndex(size_t id) {
+        materializeIndex();
         if (local2id != NULL) {
             return index + local2id[id];
         }
@@ -540,6 +549,13 @@ private:
     ZSTD_DStream ** dstream;
 
     Index * index;
+    // index on disk, read page by page (index == NULL); only for key sorted access, see openLazyIndex
+    LazyIndex * lazyIndex;
+    bool openLazyIndex();
+    // reads a lazy index completely into the index array and closes it
+    void materializeIndex();
+    T lazyKey(size_t id);
+    size_t lazyId(T dbKey);
     size_t lookupSize;
     LookupEntry * lookup;
     size_t sourceSize;
@@ -562,6 +578,13 @@ private:
     char magicBytes;
 
 };
+
+template<> bool DBReader<std::string>::openLazyIndex();
+template<> bool DBReader<DBKeyType>::openLazyIndex();
+template<> std::string DBReader<std::string>::lazyKey(size_t id);
+template<> DBKeyType DBReader<DBKeyType>::lazyKey(size_t id);
+template<> size_t DBReader<std::string>::lazyId(std::string dbKey);
+template<> size_t DBReader<DBKeyType>::lazyId(DBKeyType dbKey);
 
 // Defined in DBReaderSortIndex.cpp
 template<> void DBReader<std::string>::sortIndex(bool isSortedById);

@@ -237,6 +237,11 @@ void DBWriter::close(bool merge, bool needsSort) {
                  threads, merge, ((mode & Parameters::WRITER_LEXICOGRAPHIC_MODE) != 0), needsSort);
 
     writeDbtypeFile(dataFileName, dbtype, (mode & Parameters::WRITER_COMPRESSED_MODE) != 0);
+    // MMSEQS_WRITE_LAZY_INDEX: the index also as parquet and/or binary file, read without loading it (LazyIndex.h);
+    // not for string keys
+    if ((mode & Parameters::WRITER_LEXICOGRAPHIC_MODE) == 0) {
+        LazyIndex::writeAfterDbWrite(indexFileName, threads);
+    }
     clearMemory();
     closed = true;
 }

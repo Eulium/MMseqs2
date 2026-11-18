@@ -10,10 +10,26 @@
 #include "Util.h"
 #include "FileUtil.h"
 #include "ParquetDBWriter.h"
+#include "LazyIndex.h"
+
+#include <cstdlib>
+#include <cstring>
 
 int convert2parquet(int argc, const char **argv, const Command& command) {
     Parameters& par = Parameters::getInstance();
     par.parseParameters(argc, argv, command, true, 0, 0);
+
+    // input <db>.index: the index itself as parquet (key, offset, length), read by DBReader without loading it
+    // (LazyIndex.h). DBReader looks for <db>.index.parquet; MMSEQS_WRITE_LAZY_INDEX=binary also writes <db>.index.bin
+    const std::string indexSuffix = ".index";
+    if (par.db1.size() > indexSuffix.size()
+        && par.db1.compare(par.db1.size() - indexSuffix.size(), indexSuffix.size(), indexSuffix) == 0) {
+        const char* env = getenv("MMSEQS_WRITE_LAZY_INDEX");
+        const bool binary = env != NULL && strstr(env, "binary") != NULL;
+        LazyIndex::writeFromTextIndex(par.db1, par.db2, binary ? LazyIndex::fileName(par.db1, LazyIndex::BACKEND_BINARY) : "", par.threads);
+        Debug(Debug::INFO) << "Index " << par.db1 << " written to " << par.db2 << "\n";
+        return EXIT_SUCCESS;
+    }
 
     // key sorted, so keyorder and the key range planning work on contiguous ids
     DBReader<DBKeyType> reader(par.db1.c_str(), par.db1Index.c_str(), par.threads, DBReader<DBKeyType>::USE_INDEX|DBReader<DBKeyType>::USE_DATA);
