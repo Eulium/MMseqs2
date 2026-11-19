@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBWriter.h"
 #include "Debug.h"
@@ -1591,10 +1592,10 @@ int convertblastdb(int argc, const char **argv, const Command &command) {
     }
 }
     mappingWriter.close(true);
-    FileUtil::remove(mappingIndex.c_str());
+    LazyIndex::removeIndex(mappingIndex.c_str());
 
     lookupWriter.close(true);
-    FileUtil::remove(lookupIndex.c_str());
+    LazyIndex::removeIndex(lookupIndex.c_str());
 
     hdrWriter.close(true);
     seqWriter.close(true);

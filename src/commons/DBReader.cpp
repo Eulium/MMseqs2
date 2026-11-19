@@ -179,7 +179,9 @@ template <typename T> bool DBReader<T>::open(int accessType){
 
     bool isSortedById = false;
     // a lazy index (MMSEQS_INDEX_BACKEND, see LazyIndex.h) stays on disk, the text index is not read
-    if (externalData == false && openLazyIndex() == false) {
+    // as in the text branch below, the return value of open() stays false
+    bool sortedWithoutText = false;
+    if (externalData == false && openLazyIndex() == false && readIndexWithoutText(sortedWithoutText) == false) {
         MemoryMapped indexData(indexFileName, MemoryMapped::WholeFile, MemoryMapped::SequentialScan);
         if (!indexData.isValid()){
             Debug(Debug::ERROR) << "Cannot open index file " << indexFileName << "\n";
@@ -254,11 +256,19 @@ bool DBReader<std::string>::openLazyIndex() {
 
 template<>
 bool DBReader<DBKeyType>::openLazyIndex() {
-    const LazyIndex::Backend backend = LazyIndex::backendFromEnv();
-    if (backend == LazyIndex::BACKEND_NONE || LazyIndex::isDisabled() || indexFileName == NULL) {
+    if (LazyIndex::isDisabled() || indexFileName == NULL) {
         return false;
     }
-    if (accessType != NOSORT && accessType != SORT_BY_ID && accessType != LINEAR_ACCCESS) {
+    LazyIndex::Backend backend = LazyIndex::backendFromEnv();
+    // a DB without text index is read from its parquet/binary file without the switch
+    if (backend == LazyIndex::BACKEND_NONE || FileUtil::fileExists(indexFileName) == false) {
+        backend = LazyIndex::backendWithoutText(indexFileName);
+    }
+    if (backend == LazyIndex::BACKEND_NONE) {
+        return false;
+    }
+    if (accessType != NOSORT && accessType != SORT_BY_ID && accessType != LINEAR_ACCCESS
+        && accessType != SORT_BY_LENGTH && accessType != SHUFFLE) {
         return false;
     }
     LazyIndex* lazy = LazyIndex::open(indexFileName, backend);
@@ -266,12 +276,8 @@ bool DBReader<DBKeyType>::openLazyIndex() {
         return false;
     }
     const LazyIndex::Meta& meta = lazy->getMeta();
-    // LINEAR_ACCCESS is the key order only if the offsets increase with the key (as in sortIndex)
-    if (accessType == LINEAR_ACCCESS && meta.sortedByOffset == false) {
-        delete lazy;
-        return false;
-    }
-    if (accessType == LINEAR_ACCCESS) {
+    // LINEAR_ACCCESS is the key order if the offsets increase with the key (as in sortIndex)
+    if (accessType == LINEAR_ACCCESS && meta.sortedByOffset == true) {
         accessType = NOSORT;
     }
     if (getenv("MMSEQS_INDEX_DEBUG") != NULL) {
@@ -284,7 +290,131 @@ bool DBReader<DBKeyType>::openLazyIndex() {
     lastKey = meta.lastKey;
     maxSeqLen = meta.maxSeqLen;
     sortedByOffset = meta.sortedByOffset;
+    // the other modes: the entries stay on disk in key order, only the permutation is kept in memory
+    sortLazyIndex();
     return true;
+}
+
+template<>
+void DBReader<std::string>::sortLazyIndex() {}
+
+namespace {
+// order of sortIndex for SORT_BY_LENGTH: longest first, equal lengths in key order
+struct LazyRowByLength {
+    const unsigned int* length;
+    explicit LazyRowByLength(const unsigned int* length) : length(length) {}
+    bool operator()(DBLocalId lhs, DBLocalId rhs) const {
+        return length[lhs] > length[rhs] || (length[lhs] == length[rhs] && lhs < rhs);
+    }
+};
+// order of sortIndex for LINEAR_ACCCESS: by offset (equal offsets in key order)
+struct LazyRowByOffset {
+    const size_t* offset;
+    explicit LazyRowByOffset(const size_t* offset) : offset(offset) {}
+    bool operator()(DBLocalId lhs, DBLocalId rhs) const {
+        return offset[lhs] < offset[rhs] || (offset[lhs] == offset[rhs] && lhs < rhs);
+    }
+};
+}
+
+// Same id2local/local2id as sortIndex(bool) builds from the index array, but from one column of the lazy index:
+// 2 * sizeof(DBLocalId) bytes per entry stay in memory instead of the 24 byte entries plus the permutation.
+template<>
+void DBReader<DBKeyType>::sortLazyIndex() {
+    if (accessType != SORT_BY_LENGTH && accessType != LINEAR_ACCCESS && accessType != SHUFFLE) {
+        return;
+    }
+    id2local = new DBLocalId[size];
+    local2id = new DBLocalId[size];
+    incrementMemory(sizeof(DBLocalId) * 2 * size);
+    for (size_t i = 0; i < size; i++) {
+        local2id[i] = i;
+    }
+    if (accessType == SORT_BY_LENGTH) {
+        unsigned int* length = new unsigned int[size];
+        lazyIndex->readLengths(length);
+        SORT_PARALLEL(local2id, local2id + size, LazyRowByLength(length));
+        delete[] length;
+    } else if (accessType == LINEAR_ACCCESS) {
+        size_t* offset = new size_t[size];
+        lazyIndex->readOffsets(offset);
+        SORT_PARALLEL(local2id, local2id + size, LazyRowByOffset(offset));
+        delete[] offset;
+    } else {
+        // as in sortIndex: shuffle of size_t values with a fixed seed
+        size_t* tmpIndex = new size_t[size];
+        for (size_t i = 0; i < size; i++) {
+            tmpIndex[i] = i;
+        }
+        std::mt19937 rnd(0);
+        std::shuffle(tmpIndex, tmpIndex + size, rnd);
+        for (size_t i = 0; i < size; i++) {
+            local2id[i] = tmpIndex[i];
+        }
+        delete[] tmpIndex;
+    }
+    for (size_t i = 0; i < size; i++) {
+        id2local[local2id[i]] = i;
+    }
+}
+
+// A DB without text index (written with MMSEQS_WRITE_LAZY_INDEX=...,notext) in a mode the lazy index does not serve:
+// the parquet/binary file is read completely into the index array, then as after reading a text index.
+template<typename T>
+bool DBReader<T>::readIndexWithoutText(bool& isSortedById) {
+    if (indexFileName == NULL || LazyIndex::backendWithoutText(indexFileName) == LazyIndex::BACKEND_NONE) {
+        return false;
+    }
+    LazyIndex* lazy = LazyIndex::open(indexFileName, LazyIndex::backendWithoutText(indexFileName));
+    if (lazy == NULL) {
+        return false;
+    }
+    const LazyIndex::Meta meta = lazy->getMeta();
+    size = meta.entries;
+    dataSize = meta.dataSize;
+    maxSeqLen = meta.maxSeqLen;
+    index = new(std::nothrow) Index[size];
+    Util::checkAllocation(index, "Cannot allocate index memory in DBReader");
+    incrementMemory(sizeof(Index) * size);
+    isSortedById = fillIndexFromLazy(lazy);
+    delete lazy;
+    if (getenv("MMSEQS_INDEX_DEBUG") != NULL) {
+        Debug(Debug::WARNING) << "Index backend parquet-loaded for " << indexFileName << " (" << size << " entries, "
+                              << size * sizeof(Index) << " bytes in memory, access mode " << accessType << ")\n";
+    }
+    sortIndex(isSortedById);
+    size_t prevOffset = 0;
+    sortedByOffset = true;
+    for (size_t i = 0; i < size; i++) {
+        sortedByOffset = sortedByOffset && index[i].offset >= prevOffset;
+        prevOffset = index[i].offset;
+    }
+    return true;
+}
+
+template<>
+bool DBReader<DBKeyType>::fillIndexFromLazy(LazyIndex* lazy) {
+    // Index of DBReader<DBKeyType> and LazyIndex::Entry have the same members
+    lazy->readAll(reinterpret_cast<LazyIndex::Entry*>(index));
+    lastKey = lazy->getMeta().lastKey;
+    return true;
+}
+
+// string keys: the numbers as text; they are not in the lexicographic order of a string index
+template<>
+bool DBReader<std::string>::fillIndexFromLazy(LazyIndex* lazy) {
+    LazyIndex::Entry* entries = new LazyIndex::Entry[size];
+    lazy->readAll(entries);
+    size_t longest = 0;
+    for (size_t i = 0; i < size; i++) {
+        index[i].id = SSTR(entries[i].id);
+        index[i].offset = entries[i].offset;
+        index[i].length = entries[i].length;
+        longest = std::max(longest, index[i].id.size());
+    }
+    delete[] entries;
+    lastKey = longest;
+    return false;
 }
 
 template<>
@@ -294,7 +424,7 @@ std::string DBReader<std::string>::lazyKey(size_t) {
 
 template<>
 DBKeyType DBReader<DBKeyType>::lazyKey(size_t id) {
-    return lazyIndex->get(id).id;
+    return lazyIndex->getKey(lazyRow(id));
 }
 
 template<>
@@ -304,7 +434,8 @@ size_t DBReader<std::string>::lazyId(std::string) {
 
 template<>
 size_t DBReader<DBKeyType>::lazyId(DBKeyType dbKey) {
-    return lazyIndex->getId(dbKey);
+    const size_t row = lazyIndex->getId(dbKey);
+    return (row != DB_ENTRY_NOT_FOUND && id2local != NULL) ? id2local[row] : row;
 }
 
 // for the callers that need the index as array (getIndex, sorting by weights, ...): same state as after reading
@@ -542,7 +673,7 @@ template <typename T> char* DBReader<T>::getDataUncompressed(size_t id){
 
 
     if (lazyIndex != NULL) {
-        return getDataByOffset(lazyIndex->get(id).offset);
+        return getDataByOffset(lazyIndex->getOffset(lazyRow(id)));
     }
     if (local2id != NULL) {
         return getDataByOffset(index[local2id[id]].offset);
@@ -585,7 +716,7 @@ template <typename T> char* DBReader<T>::getDataByDBKey(T dbKey, int thrIdx) {
         return (id != DB_ENTRY_NOT_FOUND) ? getUnpadded(id, thrIdx) : NULL;
     } else{
         if (lazyIndex != NULL) {
-            return (id != DB_ENTRY_NOT_FOUND) ? getDataByOffset(lazyIndex->get(id).offset) : NULL;
+            return (id != DB_ENTRY_NOT_FOUND) ? getDataByOffset(lazyIndex->getOffset(lazyRow(id))) : NULL;
         }
         return (id != DB_ENTRY_NOT_FOUND) ? getDataByOffset(index[id].offset) : NULL;
     }
@@ -1008,7 +1139,7 @@ size_t DBReader<T>::getOffset(size_t id) {
         EXIT(EXIT_FAILURE);
     }
     if (lazyIndex != NULL) {
-        return lazyIndex->get(id).offset;
+        return lazyIndex->getOffset(lazyRow(id));
     }
     if (local2id != NULL) {
         id = local2id[id];
@@ -1123,8 +1254,15 @@ void DBReader<T>::moveDb(const std::string &srcDbName, const std::string &dstDbN
     std::vector<std::string> files = FileUtil::findDatafiles(srcDbName.c_str());
     moveDatafiles(files, dstDbName);
 
-    if (FileUtil::fileExists((srcDbName + ".index").c_str())) {
-        FileUtil::move((srcDbName + ".index").c_str(), (dstDbName + ".index").c_str());
+    // the index and its parquet/binary file (LazyIndex.h); a file left at the new name would belong to another DB
+    const char* indexSuffix[3] = {".index", ".index.parquet", ".index.bin"};
+    for (size_t i = 0; i < 3; i++) {
+        if (FileUtil::fileExists((dstDbName + indexSuffix[i]).c_str())) {
+            FileUtil::remove((dstDbName + indexSuffix[i]).c_str());
+        }
+        if (FileUtil::fileExists((srcDbName + indexSuffix[i]).c_str())) {
+            FileUtil::move((srcDbName + indexSuffix[i]).c_str(), (dstDbName + indexSuffix[i]).c_str());
+        }
     }
     if (FileUtil::fileExists((srcDbName + ".dbtype").c_str())) {
         FileUtil::move((srcDbName + ".dbtype").c_str(), (dstDbName + ".dbtype").c_str());
@@ -1140,9 +1278,12 @@ void DBReader<T>::removeDb(const std::string &databaseName){
     for (size_t i = 0; i < files.size(); ++i) {
         FileUtil::remove(files[i].c_str());
     }
-    std::string index = databaseName + ".index";
-    if (FileUtil::fileExists(index.c_str())) {
-        FileUtil::remove(index.c_str());
+    const char* indexSuffix[3] = {".index", ".index.parquet", ".index.bin"};
+    for (size_t i = 0; i < 3; i++) {
+        std::string index = databaseName + indexSuffix[i];
+        if (FileUtil::fileExists(index.c_str())) {
+            FileUtil::remove(index.c_str());
+        }
     }
     std::string dbTypeFile = databaseName + ".dbtype";
     if (FileUtil::fileExists(dbTypeFile.c_str())) {
@@ -1187,9 +1328,13 @@ void copyLinkDb(const std::string &databaseName, const std::string &outDb, DBFil
 
     const DBSuffix suffices[] = {
         { DBFiles::DATA_INDEX,    ".index"            },
+        { DBFiles::DATA_INDEX,    ".index.parquet"    },
+        { DBFiles::DATA_INDEX,    ".index.bin"        },
         { DBFiles::DATA_DBTYPE,   ".dbtype"           },
         { DBFiles::HEADER,        "_h"                },
         { DBFiles::HEADER_INDEX,  "_h.index"          },
+        { DBFiles::HEADER_INDEX,  "_h.index.parquet"  },
+        { DBFiles::HEADER_INDEX,  "_h.index.bin"      },
         { DBFiles::HEADER_DBTYPE, "_h.dbtype"         },
         { DBFiles::LOOKUP,        ".lookup"           },
         { DBFiles::SOURCE,        ".source"           },

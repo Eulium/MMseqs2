@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "result2stats.h"
 
 #include "AminoAcidLookupTables.h"
@@ -124,7 +125,7 @@ int StatsComputer::run() {
 StatsComputer::~StatsComputer() {
     statWriter->close(tsvOut);
     if (tsvOut) {
-        FileUtil::remove(statWriter->getIndexFileName());
+        LazyIndex::removeIndex(statWriter->getIndexFileName());
     }
     resultReader->close();
     delete statWriter;

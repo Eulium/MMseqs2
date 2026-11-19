@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "DBReader.h"
 #include "DBWriter.h"
 #include "Debug.h"
@@ -172,7 +173,7 @@ int gff2db(int argc, const char **argv, const Command &command) {
         }
     }
     lookupWriter.close(true);
-    FileUtil::remove(lookupWriter.getIndexFileName());
+    LazyIndex::removeIndex(lookupWriter.getIndexFileName());
     headerWriter.close(true);
     writer.close(true);
     headerReader.close();

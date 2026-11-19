@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "DBReader.h"
 #include "CommandCaller.h"
 #include "Util.h"
@@ -364,8 +365,8 @@ int search(int argc, const char **argv, const Command& command) {
         cmd.addVariable("AVAIL_DISK", SSTR(static_cast<size_t>(par.diskSpaceLimit)).c_str());
 
         // correct Eval threshold for inverted search
-        const size_t queryDbSize = FileUtil::countLines(par.db1Index.c_str());
-        const size_t targetDbSize = FileUtil::countLines(par.db2Index.c_str());
+        const size_t queryDbSize = LazyIndex::countEntries(par.db1Index);
+        const size_t targetDbSize = LazyIndex::countEntries(par.db2Index);
         par.evalThr *= ((float) queryDbSize)/targetDbSize;
 
         int originalCovMode = par.covMode;

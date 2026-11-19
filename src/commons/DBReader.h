@@ -243,7 +243,7 @@ public:
         }
         unsigned int length;
         if (lazyIndex != NULL) {
-            length=lazyIndex->get(id).length;
+            length=lazyIndex->getLength(lazyRow(id));
         } else if (local2id != NULL) {
             length=index[local2id[id]].length;
         }else{
@@ -266,7 +266,7 @@ public:
             EXIT(EXIT_FAILURE);
         }
         if (lazyIndex != NULL) {
-            return lazyIndex->get(id).length;
+            return lazyIndex->getLength(lazyRow(id));
         }
         if (local2id != NULL) {
             return index[local2id[id]].length;
@@ -552,8 +552,17 @@ private:
     // index on disk, read page by page (index == NULL); only for key sorted access, see openLazyIndex
     LazyIndex * lazyIndex;
     bool openLazyIndex();
+    // DB without text index in a mode without lazy index: reads its parquet/binary file into the index array
+    bool readIndexWithoutText(bool& isSortedById);
+    bool fillIndexFromLazy(LazyIndex* lazy);
     // reads a lazy index completely into the index array and closes it
     void materializeIndex();
+    // row of the lazy index (key order) of a local id; differs in the modes with a permutation (sortLazyIndex)
+    size_t lazyRow(size_t id) const {
+        return (local2id != NULL) ? local2id[id] : id;
+    }
+    // builds id2local/local2id for SORT_BY_LENGTH, LINEAR_ACCCESS and SHUFFLE from one column of the lazy index
+    void sortLazyIndex();
     T lazyKey(size_t id);
     size_t lazyId(T dbKey);
     size_t lookupSize;
@@ -581,6 +590,10 @@ private:
 
 template<> bool DBReader<std::string>::openLazyIndex();
 template<> bool DBReader<DBKeyType>::openLazyIndex();
+template<> bool DBReader<std::string>::fillIndexFromLazy(LazyIndex* lazy);
+template<> bool DBReader<DBKeyType>::fillIndexFromLazy(LazyIndex* lazy);
+template<> void DBReader<std::string>::sortLazyIndex();
+template<> void DBReader<DBKeyType>::sortLazyIndex();
 template<> std::string DBReader<std::string>::lazyKey(size_t id);
 template<> DBKeyType DBReader<DBKeyType>::lazyKey(size_t id);
 template<> size_t DBReader<std::string>::lazyId(std::string dbKey);

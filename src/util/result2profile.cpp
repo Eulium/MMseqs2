@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "MsaFilter.h"
 #include "Parameters.h"
 #include "PSSMCalculator.h"
@@ -293,7 +294,7 @@ int result2profile(int argc, const char **argv, const Command &command, bool ret
     }
     resultWriter.close(returnAlnRes == false || writePlain == true);
     if (writePlain) {
-        FileUtil::remove(par.db4Index.c_str());
+        LazyIndex::removeIndex(par.db4Index.c_str());
     }
     resultReader.close();
 

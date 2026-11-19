@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBReader.h"
 #include "DBWriter.h"
@@ -205,7 +206,7 @@ int nrtotaxmapping(int argc, const char **argv, const Command& command) {
         }
     }
     writer.close(true);
-    FileUtil::remove(resultDbIndex.c_str());
+    LazyIndex::removeIndex(resultDbIndex.c_str());
     reader.close();
     uniqueNames.clear();
     accessionMapping.clear();

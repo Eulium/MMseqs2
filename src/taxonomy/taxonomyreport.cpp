@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "NcbiTaxonomy.h"
 #include "Parameters.h"
 #include "DBWriter.h"
@@ -286,7 +287,7 @@ int taxonomyreport(int argc, const char **argv, const Command &command) {
             status = EXIT_FAILURE;
         }
         writer.close(true);
-        FileUtil::remove(writer.getIndexFileName());
+        LazyIndex::removeIndex(writer.getIndexFileName());
     }
     delete taxDB;
     return status;

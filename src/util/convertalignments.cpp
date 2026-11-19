@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Util.h"
 #include "Parameters.h"
 #include "Matcher.h"
@@ -1104,7 +1105,7 @@ int convertalignments(int argc, const char **argv, const Command &command) {
     if (!isParquet){
         resultWriter.close(true);
         if (isDb == false) {
-            FileUtil::remove(par.db4Index.c_str());
+            LazyIndex::removeIndex(par.db4Index.c_str());
         }
     }
     if (needTaxonomy) {

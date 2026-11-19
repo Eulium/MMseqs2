@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBReader.h"
 #include "DBWriter.h"
@@ -140,7 +141,7 @@ int recoverlongestorf(int argc, const char **argv, const Command &command) {
     }
 
     writer.close(true);
-    FileUtil::remove(writer.getIndexFileName());
+    LazyIndex::removeIndex(writer.getIndexFileName());
     headerReader.close();
     resultReader.close();
 

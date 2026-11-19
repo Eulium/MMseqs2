@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "FileUtil.h"
 #include "DBReader.h"
@@ -6,13 +7,23 @@
 #include "Util.h"
 
 #include <climits>
+#include <cstdio>
 
 int createsubdb(int argc, const char **argv, const Command& command) {
     Parameters& par = Parameters::getInstance();
     par.parseParameters(argc, argv, command, true, 0, 0);
 
     FILE *orderFile = NULL;
-    if (FileUtil::fileExists(par.db1Index.c_str())) {
+    // the keys of a DB without text index (LazyIndex.h) are read from its lazy index, in key order
+    LazyIndex* keys = NULL;
+    size_t keyRow = 0;
+    if (LazyIndex::backendWithoutText(par.db1Index) != LazyIndex::BACKEND_NONE) {
+        keys = LazyIndex::open(par.db1Index, LazyIndex::backendWithoutText(par.db1Index));
+        if (keys == NULL) {
+            Debug(Debug::ERROR) << "Cannot read the keys of " << par.db1 << "\n";
+            EXIT(EXIT_FAILURE);
+        }
+    } else if (FileUtil::fileExists(par.db1Index.c_str())) {
         orderFile = fopen(par.db1Index.c_str(), "r");
     } else {
         if(FileUtil::fileExists(par.db1.c_str())){
@@ -40,10 +51,26 @@ int createsubdb(int argc, const char **argv, const Command& command) {
     char dbKey[256];
     DBKeyType prevKey = 0;
     bool isOrdered = true;
-    while (getline(&line, &len, orderFile) != -1) {
-        Util::parseKey(line, dbKey);
-        DBKeyType key;
-        if (lookupMode) {
+    while (true) {
+        DBKeyType key = 0;
+        if (keys != NULL) {
+            if (keyRow == keys->getMeta().entries) {
+                break;
+            }
+            key = keys->getKey(keyRow++);
+            // as text only where the text is used: lookup by name and the warnings
+            if (lookupMode) {
+                snprintf(dbKey, sizeof(dbKey), "%llu", static_cast<unsigned long long>(key));
+            }
+        } else {
+            if (getline(&line, &len, orderFile) == -1) {
+                break;
+            }
+            Util::parseKey(line, dbKey);
+        }
+        if (keys != NULL && lookupMode == false) {
+            // key is set
+        } else if (lookupMode) {
             size_t lookupId = reader.getLookupIdByAccession(dbKey);
             if (lookupId == SIZE_MAX) {
                 Debug(Debug::WARNING) << "Could not find name " << dbKey << " in lookup\n";
@@ -58,6 +85,9 @@ int createsubdb(int argc, const char **argv, const Command& command) {
         prevKey = key;
         const size_t id = reader.getId(key);
         if (id == SIZE_MAX) {
+            if (keys != NULL) {
+                snprintf(dbKey, sizeof(dbKey), "%llu", static_cast<unsigned long long>(key));
+            }
             Debug(Debug::WARNING) << "Key " << dbKey << " not found in database\n";
             continue;
         }
@@ -92,7 +122,8 @@ int createsubdb(int argc, const char **argv, const Command& command) {
 
     free(line);
     reader.close();
-    if (fclose(orderFile) != 0) {
+    delete keys;
+    if (orderFile != NULL && fclose(orderFile) != 0) {
         Debug(Debug::ERROR) << "Cannot close file " << par.db1 << "\n";
         return EXIT_FAILURE;
     }

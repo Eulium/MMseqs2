@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBReader.h"
 #include "DBWriter.h"
@@ -188,9 +189,9 @@ int createtsv(int argc, const char **argv, const Command &command) {
 
     if (par.dbOut == false) {
         if (hasTargetDB) {
-            FileUtil::remove(par.db4Index.c_str());
+            LazyIndex::removeIndex(par.db4Index.c_str());
         } else {
-            FileUtil::remove(par.db3Index.c_str());
+            LazyIndex::removeIndex(par.db3Index.c_str());
         }
     }
 

@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBReader.h"
 #include "DBWriter.h"
@@ -83,7 +84,7 @@ int profile2pssm(int argc, const char **argv, const Command &command) {
     }
     writer.close(isDbOutput == false);
     if (isDbOutput == false) {
-        remove(par.db2Index.c_str());
+        LazyIndex::removeIndex(par.db2Index.c_str());
     }
     reader.close();
 

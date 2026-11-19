@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "MsaFilter.h"
 #include "Parameters.h"
 #include "PSSMCalculator.h"
@@ -539,7 +540,7 @@ int result2msa(int argc, const char **argv, const Command &command) {
     }
     resultWriter.close(true);
     if (shouldWriteNullByte == false) {
-        FileUtil::remove(resultWriter.getIndexFileName());
+        LazyIndex::removeIndex(resultWriter.getIndexFileName());
     }
     resultReader.close();
 

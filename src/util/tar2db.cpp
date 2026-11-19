@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "FileUtil.h"
 #include "DBWriter.h"
 #include "Debug.h"
@@ -279,7 +280,7 @@ int tar2db(int argc, const char **argv, const Command& command) {
     } // filename for
     writer.close();
     lookupWriter.close(true);
-    FileUtil::remove(lookupWriter.getIndexFileName());
+    LazyIndex::removeIndex(lookupWriter.getIndexFileName());
     if (fclose(source) != 0) {
         Debug(Debug::ERROR) << "Cannot close file " << sourceFile << "\n";
         EXIT(EXIT_FAILURE);

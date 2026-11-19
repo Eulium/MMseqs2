@@ -1,3 +1,4 @@
+#include "LazyIndex.h"
 #include "Parameters.h"
 #include "DBReader.h"
 #include "DBWriter.h"
@@ -75,7 +76,7 @@ const bool tsvOut, const std::string &mappingFile, const std::string &userStrToA
     }
     writer.close(tsvOut);
     if (tsvOut) {
-        FileUtil::remove(writer.getIndexFileName());
+        LazyIndex::removeIndex(writer.getIndexFileName());
     }
     reader.close();
     if(doMapping){

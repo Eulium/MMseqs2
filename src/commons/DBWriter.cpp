@@ -237,11 +237,6 @@ void DBWriter::close(bool merge, bool needsSort) {
                  threads, merge, ((mode & Parameters::WRITER_LEXICOGRAPHIC_MODE) != 0), needsSort);
 
     writeDbtypeFile(dataFileName, dbtype, (mode & Parameters::WRITER_COMPRESSED_MODE) != 0);
-    // MMSEQS_WRITE_LAZY_INDEX: the index also as parquet and/or binary file, read without loading it (LazyIndex.h);
-    // not for string keys
-    if ((mode & Parameters::WRITER_LEXICOGRAPHIC_MODE) == 0) {
-        LazyIndex::writeAfterDbWrite(indexFileName, threads);
-    }
     clearMemory();
     closed = true;
 }
@@ -543,10 +538,12 @@ void DBWriter::mergeResults(const char *outFileName, const char *outFileNameInde
         dataFilenames.emplace_back(FileUtil::findDatafiles(dataFileNames[i]));
     }
 
+    std::string lazyParquet, lazyBinary;
+    const bool lazyIndexMerge = lexicographicOrder == false && LazyIndex::writeRequested(&lazyParquet, &lazyBinary, outFileNameIndex);
+    std::vector<size_t> mergedSizes;
     // merge results into one result file
     if (dataFilenames.size() > 1) {
         std::vector<FILE*> datafiles;
-        std::vector<size_t> mergedSizes;
         for (unsigned int i = 0; i < dataFilenames.size(); i++) {
             std::vector<std::string>& filenames = dataFilenames[i];
             size_t cumulativeSize = 0;
@@ -594,7 +591,9 @@ void DBWriter::mergeResults(const char *outFileName, const char *outFileNameInde
         }
 
         // merge index
-        mergeIndex(indexFileNames, dataFilenames.size(), mergedSizes);
+        if (lazyIndexMerge == false) {
+            mergeIndex(indexFileNames, dataFilenames.size(), mergedSizes);
+        }
     } else if (dataFilenames.size() == 1) {
         std::vector<std::string>& filenames = dataFilenames[0];
         if (filenames.size() == 1) {
@@ -616,7 +615,11 @@ void DBWriter::mergeResults(const char *outFileName, const char *outFileNameInde
             EXIT(EXIT_FAILURE);
         }
     }
-    if (dataFilenames.size() > 0) {
+    // MMSEQS_WRITE_LAZY_INDEX: the index parts are merged by key without loading them, into the text index and its
+    // parquet and/or binary file (LazyIndex.h); not for string keys
+    if (dataFilenames.size() > 0 && lazyIndexMerge) {
+        LazyIndex::mergeIndexParts(indexFileNames, dataFilenames.size(), mergedSizes, outFileNameIndex, indexNeedsToBeSorted);
+    } else if (dataFilenames.size() > 0) {
         if (indexNeedsToBeSorted) {
             DBWriter::sortIndex(indexFileNames[0], outFileNameIndex, lexicographicOrder);
             FileUtil::remove(indexFileNames[0]);
