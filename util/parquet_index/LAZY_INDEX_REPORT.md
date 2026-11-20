@@ -201,24 +201,53 @@ DB: 94.6 GB sequences, 28.0 GB headers; text index 5.76 GB (5.2 GB as array per 
 | align2clust (1) | stopped by hand after 5 h 58 min, no output written yet |
 
 `align2clust` was reading from disk at about 5 GB/s the whole time (100 TB in total), at 2-4 of 16 cores busy, in
-I/O wait. It reads the 94.6 GB sequence DB at random and the 92 GB k-mer result in order; with 16 GB of its own
-memory (three text index loads of 5.2 GB among it) about 92 GB of page cache were left on the 121 GB machine, so
-the sequence DB did not stay in memory and almost every alignment waited for the disk. 7 GB of the process were
-swapped out. The memory guard did not fire: page cache counts as available memory.
+I/O wait. 7 GB of the process were swapped out. The memory guard did not fire: page cache counts as available
+memory.
 
-Conclusions:
+Correction (2026-11-20): the first explanation here was that the sequence DB did not fit into the page cache. That
+was not the cause. The 120M run (4.5.2) showed the same reading with 40 GB of memory free; the cause is a wrong
+read hint in `align2clust` (5.4). Whether all 227M sequences run in useful time with the fix has not been tested:
+the sequence DB (94.6 GB) and the k-mer result (92 GB) are both read in random order and together do not fit into
+121 GB, so some disk reading will remain.
 
-- This machine cannot run linclust on all of UniRef100 with either index in useful time; the limit is the sequence
-  data, not the index. The run is repeated on 120M sequences (4.5.2).
-- Near that limit the index matters more than its own size suggests: every GB of index array is a GB less page
-  cache for the sequences. Text needs 16 GB in `align2clust` at this size, the parquet index a few MB plus the
-  per-sequence arrays (about a third at 20M). A size where text thrashes and parquet does not was not searched for.
-- The benchmark guard should also watch for I/O wait or major page faults, not only available memory (not done).
 - The build for the `createsubdb` fix (5.2) and its test ran during the first minutes of this run.
 
-#### 4.5.2 120M UniRef100 sequences
+#### 4.5.2 120M UniRef100 sequences, 16 threads, `--split-memory-limit 70G`
 
-(running)
+Subset: 49.9 GB sequences, text index 3.0 GB (2.7 GB as array per load), parquet index 0.5 GB. k-mer result of
+round one: 40.1 GB in 16 files.
+
+Before the read hint fix (5.4), text index, one round (2026-11-19 12:06 - 2026-11-20 01:18): 47,282 s (13 h 8 min),
+of which `align2clust` 31,800 s + 13,917 s at about 2 of 16 cores. The parquet-only round was stopped after
+25 min of `align2clust` with the same behaviour.
+
+With the fix (binary `mmseqs_v4_advice`), round 1 (2026-11-20 01:57 - 06:34; a job of another user used 1.4 cores):
+
+| Module | text (s) | parquet-only (s) | text RssAnon (MB) | parquet-only RssAnon (MB) |
+|---|---|---|---|---|
+| kmermatcher | 699.5 | 652.6 | 68,344 | 68,255 |
+| align2clust | 3,851.5 | 3,994.6 | 14,726 | 9,691 |
+| createsubdb | 11.5 | 13.2 | 2,747 | 53 |
+| kmermatcher (2) | 666.5 | 640.8 | 68,180 | 68,241 |
+| align2clust (2) | 2,741.0 | 2,780.8 | 18,022 | 9,948 |
+| mergeclusters | 50.9 | 27.6 | 11,733 | 7,077 |
+| **linclust total** | **8,021** | **8,110 (+1.1 %)** | peak 68,346 | peak 68,263 |
+
+- The fix makes the text run 5.9 times faster (47,282 s to 8,021 s) with the same clustering (72,128,220
+  clusters, checksum `2b82388f6a78` before and after).
+- Parquet-only against text: the total is the same within what one round on a shared machine can show (+1.1 %).
+  `align2clust` is 1.5-3.7 % slower in wall time and needs 2.6-5.5 % more CPU (key lookups through pages, as in
+  5.1); `kmermatcher` was faster in this round (the other user's job makes single-module differences of a few
+  percent unreliable); `mergeclusters` takes half the time.
+- Memory: `align2clust` needs 5.0 GB and 8.1 GB less, `mergeclusters` 4.7 GB less, `createsubdb` 2.7 GB less. The
+  peak of the workflow is `kmermatcher` and does not change. The text run swapped out 97.8 GB over the run, the
+  parquet-only run 9.2 GB.
+- **Open problem:** both parquet-only rounds gave 72,128,221 clusters (checksum `3bcd9dbe2537` both times), text
+  72,128,220 (`2b82388f6a78`, before and after the fix). Two identical results are not the `kmermatcher` race
+  (6.1): at 120M parquet-only and text differ by one cluster, reproducibly. Not found at 20M. Cause not known yet.
+
+Round 2: parquet-only 8,009 s (same result as round 1); the text round was stopped by hand after about 40 min for
+the comparison with `master` (5.4).
 
 ## 5. Bottlenecks and fixes
 
@@ -279,8 +308,49 @@ per entry in the sequence DB and writing the parquet index. Binary: `~/mmseqs_la
   records the lowest available memory and the swapped MB of every run (after a queued job was stopped by a memory
   shortage caused by other users' processes).
 
+### 5.4 `align2clust` read its hit lists with the sequential read hint (the cause of the hours of disk reading)
+
+Not an index problem, but it hid every index effect at large scale.
+
+Finding (120M sequences, sampled once a minute during `align2clust`): 6.2 GB/s read from disk, all 16 worker
+threads waiting for a page (`folio_wait_bit_common`), 1 core busy, 40 GB of memory free, 1.6 million pages per
+second read that had been in the cache before (`workingset_refault_file`), 2,000 major faults per second, so
+about 3 MB read per fault. `/proc/<pid>/smaps` showed the flag `sr` (sequential read) on the 16 files of the
+k-mer result.
+
+Cause: `align2clust` opens the k-mer result with `LINEAR_ACCCESS`, and `DBReader::open` sets
+`POSIX_MADV_SEQUENTIAL` on the data for this mode. But the module reads the hit lists by key, in the order of
+the clustering (set cover: first one pass in order of sequence length to count the hits, then by list size), which
+is random in the file. With the sequential hint each page fault reads a large window ahead, and the kernel does
+not count such pages as used and drops them again, even with memory free. Below about 20M sequences everything
+is cached so fast that it does not show.
+
+Fix: `DBReader::setNormalAdvice()` (new) takes the hint back; `align2clust` calls it after opening the k-mer
+result and the two filter DBs of round two. The open mode itself is unchanged, so ids and output are the same.
+
+Effect at 120M (4.5.2): `align2clust` 31,800 s to 3,851 s and 13,917 s to 2,741 s, linclust 5.9 times faster,
+16 of 16 cores busy, disk reads 0.25-0.5 GB/s and falling while the cache fills; same clustering checksum.
+
+Check against `master` (`d401e78c`, own build), 20M UniRef50, text index, 16 threads, 2 rounds each
+(2026-11-20 09:36-10:14, other users' processes used 1.0-2.4 cores, so times are only rough):
+
+| Build | linclust wall (s) | align2clust 1 / 2 (s) | Clusters, checksum |
+|---|---|---|---|
+| this branch with the hint change | 312.6, 350.9 | 85.2, 92.3 / 92.8, 103.3 | 19,957,552, `8a66e0ba3b62` |
+| `master` | 376.1, 344.1 | 104.4, 99.1 / 104.9, 92.8 | 19,957,552, `8a66e0ba3b62` |
+| this branch without the hint change | 338.4, 319.0 | 92.1, 87.8 / 96.7, 91.9 | 19,957,552, `8a66e0ba3b62` |
+
+Same output in all six runs. No time difference beyond the noise: at 20M the k-mer result is in the page cache
+and the hint has no visible cost. `master` has the same `align2clust` and the same hint code; that it shows the
+same disk reading at 120M follows from the code but was not run.
+
+Not tested: `POSIX_MADV_RANDOM` instead of normal (reads only the page asked for; better when the data does not
+fit into memory, slower to fill a cold cache); other modules that open a result with `LINEAR_ACCCESS` and read
+it by key (not searched for).
+
 ## 6. Known problems and limits
 
+- All of UniRef100 (227M) has not been clustered: the one attempt was stopped (4.5.1) before the read hint fix (5.4).
 - Shell workflows that read `.index` with awk break in parquet-only mode: `linclust.sh` (clusthash branch, old
   `linclust` path), `cascaded_clustering.sh` (reassign branch), `blastp.sh` (sensitivity steps, one prefilter branch).
   The default paths tested here do not use them.

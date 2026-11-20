@@ -1179,6 +1179,14 @@ void DBReader<T>::setSequentialAdvice() {
 }
 
 template<typename T>
+void DBReader<T>::setNormalAdvice() {
+    for(size_t i = 0; i < dataFileCnt; i++){
+        size_t dataSize = dataSizeOffset[i+1] - dataSizeOffset[i];
+        Util::madviseLogged(dataFiles[i], dataSize, POSIX_MADV_NORMAL, dataFileName);
+    }
+}
+
+template<typename T>
 void DBReader<T>::readLookup(char *data, size_t dataSize, DBReader::LookupEntry *lookup) {
     size_t i = 0;
     size_t currPos = 0;

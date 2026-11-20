@@ -507,6 +507,11 @@ public:
 
     void setSequentialAdvice();
 
+    // LINEAR_ACCCESS and SORT_BY_OFFSET set the sequential read hint on the data. A caller that opens the DB in
+    // one of these modes but reads the entries by key (in no file order) must take the hint back: with it each
+    // page fault reads a large window ahead and the kernel drops the pages again early.
+    void setNormalAdvice();
+
     void decomposeDomainByAminoAcid(size_t worldRank, size_t worldSize, size_t *startEntry, size_t *numEntries);
 
 private:

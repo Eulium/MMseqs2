@@ -412,6 +412,7 @@ int doAlign2clust(Parameters &par, DBWriter &resultWriter, DBReader<DBKeyType> &
             DBReader<DBKeyType>::USE_DATA | DBReader<DBKeyType>::USE_INDEX
         );
         cluDbr->open(DBReader<DBKeyType>::LINEAR_ACCCESS);
+        cluDbr->setNormalAdvice(); // read by key, not in file order
 
         std::string cluSeqIndex = par.filterSeqDBFile + ".index";
         cluSeqDbr = new DBReader<DBKeyType>(
@@ -420,6 +421,7 @@ int doAlign2clust(Parameters &par, DBWriter &resultWriter, DBReader<DBKeyType> &
         );
             
         cluSeqDbr->open(DBReader<DBKeyType>::LINEAR_ACCCESS);
+        cluSeqDbr->setNormalAdvice(); // read by key, not in file order
     } else if (par.filterCluDBFile.empty() != par.filterSeqDBFile.empty()) {
         Debug(Debug::ERROR)<< "Error: Both filterCluDBFile and filterSeqDBFile should be provided together.\n";
         EXIT(EXIT_FAILURE);
@@ -990,6 +992,10 @@ int align2clust(int argc, const char **argv, const Command &command) {
     DBReader<DBKeyType> alnDbr(par.db2.c_str(), par.db2Index.c_str(), par.threads,
                                   DBReader<DBKeyType>::USE_INDEX | DBReader<DBKeyType>::USE_DATA);
     alnDbr.open(DBReader<DBKeyType>::LINEAR_ACCCESS);
+    // The hit lists are read by key in the order of the clustering (by sequence length or by list size), which
+    // is no file order. With the sequential hint of LINEAR_ACCCESS a 120M sequence run read 6 GB/s from disk
+    // with all threads waiting (see util/parquet_index/LAZY_INDEX_REPORT.md).
+    alnDbr.setNormalAdvice();
     int dbtype =  Parameters::DBTYPE_CLUSTER_RES;
 
     DBWriter resultWriter(par.db3.c_str(), par.db3Index.c_str(), 1, par.compressed, dbtype);
