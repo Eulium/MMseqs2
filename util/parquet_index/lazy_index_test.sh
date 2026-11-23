@@ -9,6 +9,8 @@
 #   5. clustering workflows (linclust, cluster): same clusters with every backend
 # usage: lazy_index_test.sh <mmseqs> <sequence DB with _h> <workdir> [queries]
 set -uo pipefail
+# plain read/write copy: cp uses the NFS 4.2 server-side copy, which hung a job for 23 h (nfs42_proc_copy)
+copy() { cat -- "$1" > "$2"; }
 M="$1"; SRC="$2"; W="$3"; NQ="${4:-300}"
 T=$(nproc)
 mkdir -p "$W"; cd "$W"
@@ -68,7 +70,7 @@ echo "== 4. stale index, threads"
 MMSEQS_WRITE_LAZY_INDEX=binary "$M" convert2parquet stale.index stale.index.parquet -v 1
 head -1000 sub.keys > stale.keys
 "$M" createsubdb stale.keys db stale2 --subdb-mode 0 -v 1 2> /dev/null
-cp stale.index.parquet stale2.index.parquet; cp stale.index.bin stale2.index.bin    # index files of another DB
+copy stale.index.parquet stale2.index.parquet; copy stale.index.bin stale2.index.bin    # index files of another DB
 for b in parquet parquet-custom binary; do
     MMSEQS_INDEX_BACKEND=$b "$M" convert2fasta stale2 "stale_$b.fa" -v 2 > "err_stale_$b.txt" 2>&1
     "$M" convert2fasta stale2 stale_text.fa -v 1 2> /dev/null

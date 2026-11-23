@@ -11,16 +11,18 @@
 # Builds MMseqs2 (branch parquet_index) and runs all correctness tests and benchmarks of the parquet index
 # (src/commons/LazyIndex.h). Results: one CSV with every measured value and a summary text file.
 #
-#   sbatch [sbatch options] lazy_index_sbatch.sh <MMseqs2 repo> <database> <tmp dir> [output dir]
-#   bash lazy_index_sbatch.sh <MMseqs2 repo> <database> <tmp dir> [output dir]          (without slurm)
+#   sbatch [sbatch options] lazy_index_sbatch.sh <MMseqs2 repo> <database> [output dir]
+#   SCRATCH=<dir> bash lazy_index_sbatch.sh <MMseqs2 repo> <database> [output dir]      (without slurm)
 #
 #   <MMseqs2 repo>  checkout of the branch; the helper scripts are taken from <repo>/util/parquet_index
 #                   (sbatch runs a copy of this script, so they cannot be found next to it)
 #   <database>      MMseqs2 sequence DB (made with createdb, with its _h DB) or a FASTA file (.gz allowed);
-#                   a FASTA file is converted with createdb in <tmp dir>
-#   <tmp dir>       build directory, subsets, workflow temporary files: local scratch with space for about
-#                   four times the largest subset plus the build (1 GB)
-#   [output dir]    default <tmp dir>/results: lazy_index_results.csv, lazy_index_summary.txt, logs/, csv/
+#                   a FASTA file is converted with createdb in ${SCRATCH}
+#   ${SCRATCH}      environment variable, must be set: all temporary files go there (build directory, subsets,
+#                   workflow temporary files). Local scratch with space for about four times the largest
+#                   subset plus the build (1 GB); not a network filesystem (random reads through mmap are slow
+#                   there, and cp hung on NFS 4.2). "<tmp dir>" below means ${SCRATCH}.
+#   [output dir]    default ./lazy_index_results: lazy_index_results.csv, lazy_index_summary.txt, logs/, csv/
 #
 # Build requirements: cmake >= 3.15, gcc/g++ with OpenMP, make, zlib; a Rust toolchain (cargo) for block-aligner;
 # network access at configure time unless lz4 is installed (carquet downloads lz4, see lib/carquet/CMakeLists.txt).
@@ -61,11 +63,12 @@
 # Exit code: 0 if every step ran and every check passed.
 set -uo pipefail
 
-if [ $# -lt 3 ]; then
-    sed -n '11,22p' "$0" | sed 's/^# \{0,1\}//'
+if [ $# -lt 2 ] || [ -z "${SCRATCH:-}" ]; then
+    [ -z "${SCRATCH:-}" ] && echo "SCRATCH is not set: it must name the directory for all temporary files" >&2
+    sed -n '11,25p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
-REPO="$(readlink -f "$1")"; DB_ARG="$(readlink -f "$2")"; TMP="$3"; OUT="${4:-$3/results}"
+REPO="$(readlink -f "$1")"; DB_ARG="$(readlink -f "$2")"; TMP="$SCRATCH"; OUT="${3:-lazy_index_results}"
 mkdir -p "$TMP" "$OUT" || exit 2
 TMP="$(readlink -f "$TMP")"; OUT="$(readlink -f "$OUT")"
 U="$REPO/util/parquet_index"
@@ -89,6 +92,8 @@ M="$BUILD_DIR/src/mmseqs"
 STATUS="$OUT/steps_status.csv"; echo "step,exit,seconds" > "$STATUS"
 TESTS="$CSVS/tests.csv"; echo "group,test,result" > "$TESTS"
 log() { echo "[$(date '+%F %T')] $*"; }
+# plain read/write copy: cp uses the NFS 4.2 server-side copy, which hung a job for 23 h (nfs42_proc_copy)
+copy() { cat -- "$1" > "$2"; }
 has() { case " $STEPS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 # step <name> <command...>: output to logs/<name>.log, exit code and time to steps_status.csv
 step() {
@@ -180,10 +185,10 @@ subset() {
 copy_db() {
     local s="$1" d="$2" kind="$3" f
     for f in "$s" "$s".[0-9]*; do [ -e "$f" ] && ln -sf "$(readlink -f "$f")" "$d${f#"$s"}"; done
-    cp "$s.dbtype" "$d.dbtype"
+    copy "$s.dbtype" "$d.dbtype"
     case "$kind" in
-        text) cp "$s.index" "$d.index" ;;
-        lazy) cp "$s.index" "$d.index"; MMSEQS_WRITE_LAZY_INDEX=binary "$M" convert2parquet "$d.index" "$d.index.parquet" -v 1 ;;
+        text) copy "$s.index" "$d.index" ;;
+        lazy) copy "$s.index" "$d.index"; MMSEQS_WRITE_LAZY_INDEX=binary "$M" convert2parquet "$d.index" "$d.index.parquet" -v 1 ;;
         notext) "$M" convert2parquet "$s.index" "$d.index.parquet" -v 1 ;;
     esac
 }
@@ -241,14 +246,14 @@ if has lookup; then
     LDB="$(subset "$LOOKUP_SEQS" lookupdb)"
     step lookup "$U/lazy_index_bench.sh" "$M" "$LDB" "$WORK/lookup" "$ROUNDS" "$THREADS" 2000
     for f in lazy_index.csv index_files.csv other_readers.csv; do
-        [ -e "$WORK/lookup/$f" ] && cp "$WORK/lookup/$f" "$CSVS/lookup_$f"
+        [ -e "$WORK/lookup/$f" ] && copy "$WORK/lookup/$f" "$CSVS/lookup_$f"
     done
 fi
 FIRST_SIZE="${CLUSTER_SEQS%% *}"
 if has cluster; then
     CDB="$(subset "$FIRST_SIZE" "clusterdb_$FIRST_SIZE")"
     step "cluster_$FIRST_SIZE" "$U/lazy_index_cluster_bench.sh" "$M" "$CDB" "$WORK/cluster_$FIRST_SIZE" "$(wc -l < "$CDB.index")" "$ROUNDS" "$THREADS" linclust
-    [ -e "$WORK/cluster_$FIRST_SIZE/cluster_linclust.csv" ] && cp "$WORK/cluster_$FIRST_SIZE/cluster_linclust.csv" "$CSVS/cluster_${FIRST_SIZE}_linclust.csv"
+    [ -e "$WORK/cluster_$FIRST_SIZE/cluster_linclust.csv" ] && copy "$WORK/cluster_$FIRST_SIZE/cluster_linclust.csv" "$CSVS/cluster_${FIRST_SIZE}_linclust.csv"
 fi
 if has steps; then
     for n in $CLUSTER_SEQS; do
@@ -256,7 +261,7 @@ if has steps; then
         for wf in $WORKFLOWS; do
             step "steps_${n}_$wf" "$U/lazy_index_steps_bench.sh" "$M" "$CDB" "$WORK/steps_${n}_$wf" 0 "$ROUNDS" "$THREADS" "$wf" "$STEP_VARIANTS" "$EXTRA_ARGS"
             for f in runs steps; do
-                [ -e "$WORK/steps_${n}_$wf/${f}_$wf.csv" ] && cp "$WORK/steps_${n}_$wf/${f}_$wf.csv" "$CSVS/steps_${n}_${wf}_$f.csv"
+                [ -e "$WORK/steps_${n}_$wf/${f}_$wf.csv" ] && copy "$WORK/steps_${n}_$wf/${f}_$wf.csv" "$CSVS/steps_${n}_${wf}_$f.csv"
             done
         done
     done

@@ -22,6 +22,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIME_BIN="${TIME_BIN:-/usr/bin/time}"
 mkdir -p "$W"; cd "$W"
 log() { echo "[$(date '+%F %T')] $*"; }
+# plain read/write copy: cp uses the NFS 4.2 server-side copy, which hung a job for 23 h (nfs42_proc_copy)
+copy() { cat -- "$1" > "$2"; }
 CSV="$W/runs_$WF.csv"; STEPS="$W/steps_$WF.csv"
 [ -e "$CSV" ] || echo "variant,round,wall_s,cpu_s,peak_rss_mb,anon_mb,lazy_opens,text_opens,loaded_opens,big_text_opens,clusters,result,other_cores,exit,min_avail_mb,swapout_mb" > "$CSV"
 [ -e "$STEPS" ] || echo "variant,round,start,module,wall_s,user_s,sys_s,peak_rss_kb,anon_kb,exit" > "$STEPS"
@@ -68,13 +70,13 @@ if [ ! -e cdb.dbtype ]; then
     else
         for s in "" _h; do
             for f in "$SRC$s" "$SRC$s".[0-9]*; do [ -e "$f" ] && ln -s "$(readlink -f "$f")" "cdb$s${f#"$SRC$s"}"; done
-            cp "$SRC$s.index" "cdb$s.index"; cp "$SRC$s.dbtype" "cdb$s.dbtype"
+            copy "$SRC$s.index" "cdb$s.index"; copy "$SRC$s.dbtype" "cdb$s.dbtype"
         done
     fi
     for s in "" _h; do
         "$M" convert2parquet "cdb$s.index" "cdb$s.index.parquet" -v 1
         for f in "cdb$s" "cdb$s".[0-9]*; do [ -e "$f" ] && ln -s "$(readlink -f "$f")" "cdbp$s${f#"cdb$s"}"; done
-        cp "cdb$s.dbtype" "cdbp$s.dbtype"; cp "cdb$s.index.parquet" "cdbp$s.index.parquet"
+        copy "cdb$s.dbtype" "cdbp$s.dbtype"; copy "cdb$s.index.parquet" "cdbp$s.index.parquet"
     done
 fi
 N=$(wc -l < cdb.index)
@@ -101,7 +103,7 @@ for r in $(seq 1 "$ROUNDS"); do
             if [ ! -e "$in.dbtype" ]; then
                 for s in "" _h; do
                     for f in "cdb$s" "cdb$s".[0-9]*; do [ -e "$f" ] && ln -s "$(readlink -f "$f")" "$in$s${f#"cdb$s"}"; done
-                    cp "cdb$s.dbtype" "$in$s.dbtype"
+                    copy "cdb$s.dbtype" "$in$s.dbtype"
                     MMSEQS_LAZY_INDEX_PAGE_ROWS="$rows" "$M" convert2parquet "cdb$s.index" "$in$s.index.parquet" -v 1
                 done
             fi
