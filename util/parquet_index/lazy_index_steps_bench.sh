@@ -5,6 +5,8 @@
 #             text    text index for all DBs (no switch set)
 #             both    text index and parquet file written for every DB, read through the parquet file
 #             notext  parquet file only: MMSEQS_WRITE_LAZY_INDEX=parquet,notext, input DB without text index
+#             both_textmem, notext_textmem  the same with MMSEQS_LAZY_INDEX_TEXT_MEMORY=1: kmermatcher plans its
+#                     memory as with the text index, for the same clusters as text when it works in parts
 #   per run:  wall and CPU time, peak RssAnon of the process tree, CPU used by other processes of the machine,
 #             index opens by kind (MMSEQS_INDEX_DEBUG), per module: wall, CPU, peak RssAnon
 #   check:    same clusters (sorted representative/member pairs) as the first text run
@@ -95,6 +97,8 @@ for r in $(seq 1 "$ROUNDS"); do
         fi
         env=(env MMSEQS_INDEX_DEBUG=1 MMSEQS_REAL="$bin" MMSEQS_STEPS="$W/steps.tmp"); in=cdb
         grep -q "^$v,$r," "$CSV" && { log "   round $r $v: done before"; continue; }
+        # <kind>_textmem: the lazy index registers the memory of a text index (same k-mer parts as the text run)
+        if [ "${kind%_textmem}" != "$kind" ]; then kind="${kind%_textmem}"; env+=(MMSEQS_LAZY_INDEX_TEXT_MEMORY=1); fi
         [ "$kind" = both ] && env+=(MMSEQS_INDEX_BACKEND=parquet-custom MMSEQS_WRITE_LAZY_INDEX=parquet)
         [ "$kind" = notext ] && { env+=(MMSEQS_WRITE_LAZY_INDEX=parquet,notext); in=cdbp; }
         if [ -n "$rows" ]; then

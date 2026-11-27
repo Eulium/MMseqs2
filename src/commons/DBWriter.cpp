@@ -744,6 +744,15 @@ void DBWriter::createRenumberedDB(const std::string& dataFile, const std::string
     }
     reader.close();
     std::rename(indexTmp.c_str(), indexFile.c_str());
+    // the parquet/binary file of the index (MMSEQS_WRITE_LAZY_INDEX) was written for the old keys: write it again
+    std::string parquetFile, binaryFile;
+    bool noText = false;
+    if (LazyIndex::writeRequested(&parquetFile, &binaryFile, indexFile, &noText)) {
+        LazyIndex::writeFromTextIndex(indexFile, parquetFile, binaryFile, 1);
+        if (noText) {
+            FileUtil::remove(indexFile.c_str());
+        }
+    }
 
     if (lookupReader != NULL) {
         if (fclose(sLookup) != 0) {

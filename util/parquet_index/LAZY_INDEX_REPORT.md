@@ -242,12 +242,65 @@ With the fix (binary `mmseqs_v4_advice`), round 1 (2026-11-20 01:57 - 06:34; a j
 - Memory: `align2clust` needs 5.0 GB and 8.1 GB less, `mergeclusters` 4.7 GB less, `createsubdb` 2.7 GB less. The
   peak of the workflow is `kmermatcher` and does not change. The text run swapped out 97.8 GB over the run, the
   parquet-only run 9.2 GB.
-- **Open problem:** both parquet-only rounds gave 72,128,221 clusters (checksum `3bcd9dbe2537` both times), text
-  72,128,220 (`2b82388f6a78`, before and after the fix). Two identical results are not the `kmermatcher` race
-  (6.1): at 120M parquet-only and text differ by one cluster, reproducibly. Not found at 20M. Cause not known yet.
+- Both parquet-only rounds gave 72,128,221 clusters (checksum `3bcd9dbe2537` both times), text 72,128,220
+  (`2b82388f6a78`, before and after the fix). Not the `kmermatcher` race (6.1), each variant repeats its result.
+  Cause found (6.2): the memory budget of `kmermatcher` depends on the size of the index in memory.
 
 Round 2: parquet-only 8,009 s (same result as round 1); the text round was stopped by hand after about 40 min for
 the comparison with `master` (5.4).
+
+### 4.6 Remote run on x86 (`lazy_index_sbatch.sh`, slurm job 557515, 2026-11-19)
+
+Results in `examples/lazy_test_1`. Machine: super011, AMD EPYC 9655P, 64 of the cores for the job, 1,007 GB RAM;
+build `2d70c072` plus 2 modified files (before the read hint fix 5.4). DB: UniRef100 with 408,368,587 sequences
+(text index 10.6 GB). Other jobs used 83-86 cores of the node the whole time; the rounds still agree within 1 %.
+
+- Correctness: 168 of 168 checks passed (first run on x86). All 24 clustering runs gave the same result
+  (15,379,136 clusters, `c84b01728aa0`).
+- Index files, 408M entries: parquet 1.60 GB, text 10.6 GB, binary 6.5 GB; writing the parquet file takes 28 s.
+- Lookups on the whole DB (median of 3): the text index costs 13-14 s and 9.3 GB per open, the parquet index
+  0.2-0.3 s and 0.1 GB. 1,000 random keys: 14.5 s text, 1.1 s parquet. 10M random keys: 21.7 s text, 13.8 s own
+  decoder, 8.9 s binary, 133 s carquet. Full scan in order: 49.7 s text, 48.3 s own decoder, 69.7 s carquet.
+  `convertalis` (64 threads): 14.7 s and 18.7 GB with text, 3.1 s and 0.3 GB with parquet.
+- linclust, 20M sequences, 64 threads (median of 3): text 326.3 s, parquet-only 328.8 s (+0.8 %), text + parquet
+  332.0 s; CPU 15,777 s against 16,472 s (+4.4 %). Per module: `align2clust` +2 % wall and +6 % CPU in both
+  rounds, `kmermatcher` +1-2 %, `createsubdb` 2.1 s to 2.9 s, `mergeclusters` 7.2 s to 3.7 s. Peak memory is the
+  same (41.4 GB, `kmermatcher`); `align2clust` needs 0.9-1.2 GB less, `mergeclusters` 0.9 GB less.
+- carquet as reader is the slow one in every test: linclust 414 s against 329 s with the own decoder (CPU +33 %).
+- Different from the aarch64 machine: there `align2clust` needed the same CPU with both indexes after fix 5.1
+  (4.4.3); on x86 with 64 threads 6 % more remain. Not analysed yet.
+- Not measured in this run: clustering above 20M sequences, which is where the index size matters.
+
+### 4.7 Remote run at 100M and 408M sequences (slurm job 558405, 2026-11-23)
+
+Results in `examples/parquet_stress`. Machine: hulk, AMD EPYC 7742, 32 threads, 2,012 GB RAM, tmp on local
+scratch; build `f7a2b2dc` plus 1 modified file (with the read hint fix); `--split-memory-limit 70G`; one round.
+The peak RSS of 406 GB shows that no 128 GB limit was in force for the job.
+
+| | 100M text | 100M parquet-only | 408M text | 408M parquet-only |
+|---|---|---|---|---|
+| linclust wall (s) | 3,856 | 3,907 (+1.3 %) | 17,093 | 16,899 (-1.1 %) |
+| linclust CPU (s) | 100,663 | 103,711 (+3.0 %) | 471,644 | 476,020 (+0.9 %) |
+| Peak allocated memory of the run (MB) | 68,426 | 68,346 | 68,782 | 68,446 |
+| align2clust (1) peak (MB) | 14,737 | 10,241 | 58,372 | 39,976 |
+| createsubdb peak (MB) | 2,289 | 47 | 9,347 | 175 |
+| align2clust (2) peak (MB) | 16,748 | 10,382 | 44,128 | 21,874 |
+| mergeclusters peak (MB) | 10,264 | 6,322 | 39,868 | 25,544 |
+| mergeclusters wall (s) | 58.9 | 32.8 | 222.1 | 128.6 |
+| Clusters | 60,080,301 | 60,080,301 | 184,245,288 | 184,245,283 |
+| Checksum | `06d34af85409` | `4a444f712cd8` | `17074cfd8d92` | `c885c5d87a2a` |
+
+- The peak of the whole run does not change: it is `kmermatcher`, which fills the 70 GB of
+  `--split-memory-limit` with either index. Every other module needs 31-50 % less at 408M (18-22 GB less in
+  `align2clust`, 14 GB less in `mergeclusters`). With a lower split limit the peak moves to `align2clust`, and
+  there the parquet index decides: 58.4 GB against 40.0 GB.
+- Time is the same within 1-2 %; all of UniRef100 clusters in 4 h 45 min with either index.
+- Text and parquet-only give different clusterings at both sizes (as at 120M in 4.5.2, where each variant
+  repeated its own result). Cause found later (6.2): the memory budget of `kmermatcher`, not a wrong index. The summary of this run still said "all checks
+  passed"; the script now counts differing results as a failure.
+- The summary tables called the memory value "median". The value of a run always was its peak (highest
+  allocated memory, sampled every 50 ms); the median was taken over the rounds. The script now shows the highest
+  peak of all rounds and has a block with the peak of the whole run per variant.
 
 ## 5. Bottlenecks and fixes
 
@@ -397,6 +450,122 @@ DB, `src/test/TestDbChecksum.cpp`):
 Resolved (project owner, 2026-11-19): this is a known race condition in this fork's `kmermatcher`, independent of
 the index. Single off cases of this kind are to be ignored when results are compared; it is not counted against
 the parquet path.
+
+### 6.2 Different clusterings of text and parquet-only at 100M and more: the memory budget of `kmermatcher`
+
+Found on spark004, 2026-11-24, 120M UniRef100 subset, build `mmseqs_v4_advice`, 16 threads, default
+`--split-memory-limit` (0). Both variants were run with all intermediate DBs kept and every DB compared with
+`test_dbchecksum` (order-independent checksum, entries, bytes):
+
+| DB | text | parquet-only | |
+|---|---|---|---|
+| `pref` (first `kmermatcher`, 1 part) | `334b5758b92d334b` | `334b5758b92d334b` | same |
+| `clu` (first `align2clust`), 73,027,176 entries | `72e6ad3fe3dfca0f` | `72e6ad3fe3dfca0f` | same |
+| `input_rep` (`createsubdb`) | `2d0102fc92e7e51e` | `2d0102fc92e7e51e` | same |
+| `pref_rep` (second `kmermatcher`, 2 parts) | `df4d05a5db240b7c` | `63bc2faed63ccbab` | 96 of 73,027,176 entries differ |
+| `clu_rep` (second `align2clust`) | 72,128,266 entries | 72,128,270 entries | follows from `pref_rep` |
+| final clustering | 72,128,266 | 72,128,270 | follows |
+
+- The first difference is the output of the second `kmermatcher`. In the 96 entries one hit has another score or
+  diagonal (e.g. `86724017 569 12` against `86724017 313 11`); the two entries looked at have the same targets.
+- It is not the race of 6.1: a second run of this `kmermatcher` gave the same DB again for either variant.
+- It is not the reader: `test_lazyindex` on the two `input_rep` DBs (text index against parquet-only), all access
+  modes, 73,027,176 entries: no difference.
+- Cause: `Util::computeMemory` returns the limit (`--split-memory-limit`, or 90 % of the RAM) minus the memory the
+  open DB readers and writers have registered (`MemoryTracker`). A text index registers 24 B per entry (1.75 GB for
+  `input_rep`), the lazy index registers nothing. The parquet-only `kmermatcher` therefore plans with 1.75 GB more.
+  When the k-mers do not fit into the budget, they are processed in parts (here "Process file into 2 parts"), the
+  size of a part follows from the budget, and the hits found depend slightly on where the parts are cut.
+- Proof: the parquet-only `kmermatcher` run again with `--split-memory-limit 115784562240B` (90 % of the RAM minus
+  the 1,752,652,224 B of the text index) wrote exactly the text result (`df4d05a5db240b7c`, same bytes).
+- This explains all observations: no difference at 20M (one part, the budget does not matter), differences at 100M,
+  120M and 408M (parts), and different results of the same variant with another limit (120M text: 72,128,220
+  clusters with `70G` in 4.5.2, 72,128,266 with the default here). The text index alone shows the same between
+  two machines with different RAM or two values of `--split-memory-limit` (not tested on upstream `master`).
+- Both clusterings are valid results of the same algorithm; none of the index code is wrong. But the check "same
+  clusters as the text run" of the benchmark cannot pass for a workflow whose `kmermatcher` works in parts.
+
+Not changed in the code. Options:
+
+1. Leave it. Parquet-only uses the freed memory for larger parts; results differ from the text run as they do
+   between two memory limits.
+2. For comparisons only: let the lazy index register the size of the text index it replaces (a switch, e.g. an
+   environment variable). Results are then identical to the text run, at the price of planning with less memory
+   than is free. Useful as a test mode of the benchmark, not as default.
+3. Make the result of `kmermatcher` independent of the part size. That is a change of the algorithm of this fork
+   and of its results, not of the index.
+
+### 6.3 linclust regression tests (`util/regression`), 2026-11-27, and a stale parquet file after `createdb`
+
+The five linclust tests of the regression suite (32,131 sequences, check: number of clusters), build of the working
+tree, on spark004. "parts" is what the `kmermatcher` calls of the test print ("Process file into N parts").
+
+| Configuration | `LINCLUST` (v1) | `LINCLUST2` (v2) | `LINCLUST_SPLIT` (v1, 10M) | `LINCLUST2_SPLIT` (v2, 10M) | `EASY_LINCLUST` (v1) |
+|---|---|---|---|---|---|
+| text | pass | pass | pass, 2 parts | pass, 4 and 5 parts | pass |
+| text + parquet, read through parquet | pass | pass | pass, 2 parts | pass, **3** and 5 parts | pass |
+| the same with `MMSEQS_LAZY_INDEX_TEXT_MEMORY=1` | pass | pass | pass, 2 parts | pass, 4 and 5 parts | pass |
+| parquet only | fails (awk) | pass | fails (awk) | pass, **3** and 5 parts | fails (awk) |
+| parquet only with `MMSEQS_LAZY_INDEX_TEXT_MEMORY=1` | fails (awk) | pass | fails (awk) | pass, 4 and 5 parts | fails (awk) |
+
+- Beyond the cluster count of the suite, the clusterings themselves were compared (md5 of the sorted
+  representative/member pairs, 32,131 pairs each): every parquet run that produces a result has the checksum of the
+  text run. `LINCLUST` and `LINCLUST_SPLIT` `01c62190905a` (26,491 clusters), `LINCLUST2` and `LINCLUST2_SPLIT`
+  `cf806a2e100c` (25,397), `EASY_LINCLUST` `1e2d07499b92` (26,477); with and without the switch, also where the
+  number of parts differs (3 against 4).
+- `MMSEQS_LAZY_INDEX_TEXT_MEMORY=1` is option 2 of 6.2, now in `DBReader.cpp`: a reader with a lazy index registers
+  24 B per entry as the text index does. The table shows the effect of 6.2 in small: without the switch the parquet
+  runs plan 3 parts where text plans 4, with the switch they plan 4. The cluster count of the test is the same
+  either way. Not yet run at 120M (there it should give the text clustering for the whole workflow).
+- The three failures are the known limit of section 6: the old workflow (`--linclust-version 1`) reads
+  `pre_clust.index` with awk, which does not exist without text index.
+- **Bug found and fixed:** in the first run the old-path tests gave 26,477 instead of 26,491 clusters when the
+  parquet file was read. `createdb` (default: shuffle) ends with `DBWriter::createRenumberedDB`, which wrote only a
+  new text index. The parquet/binary file kept the entries from before the renumbering: same size and number of
+  entries, so the stale check did not see it, but other offsets and lengths per key (`test_lazyindex`: 32,130 of
+  32,131 entries different). With parquet only, the text index stayed and was the one read. `createRenumberedDB`
+  now writes the parquet/binary file again (and removes the text index with `notext`). After the fix
+  `test_lazyindex` passes on the `createdb` output for all three backends and for parquet only.
+  The earlier benchmarks are not affected: their input DBs got the parquet file from `convert2parquet`.
+- `createdb --createdb-mode 2` (GPU) writes its index in `mergeSequentialByJointIndex` without the lazy index
+  files: not changed, not tested.
+
+### 6.4 Full regression suite (`util/regression`, 41 tests), 2026-11-27: a crash in `splitsequence` and `extractorfs`
+
+All 41 tests that run on spark004 (no MPI, no GPU) were run with the text index, with text + parquet read through
+parquet (`both`) and with parquet only (`notext`). Results are kept in `~/mmseqs_lazy_index/regression_full`; a test
+counts as equal when its report file (the numbers the suite checks) is identical to the one of the text run.
+
+| variant | GOOD | identical report to text | failed |
+|---|---|---|---|
+| text | 41 | - | 0 |
+| both, before the fix | 34 | 34 | 7 (segmentation fault) |
+| both, after the fix | 41 | 41 | 0 |
+| notext, after the fix | 27 | 27 | 14 (a shell script reads `.index` as text) |
+
+**Bug (fixed): race in `DBReader::materializeIndex`.** `splitsequence`, `extractorfs` and `extractframes` call
+`decomposeDomainByAminoAcid` inside their parallel region. With a lazy index this converts the index to the in-memory
+array, and every thread did so at the same time: several threads decoded the same pages and deleted the same
+`LazyIndex` (crash in `readPageHeader`). Seven tests failed with it (all nucleotide searches: NUCLNUCL_SEARCH,
+NUCLNUCL_TRANS_SEARCH, PROTNUCL_SEARCH, NUCLPROTTAX_SEARCH and the three LINSEARCH tests). Fix: the conversion is
+in a named `omp critical` section with a second check inside, so one thread converts and the others wait.
+The linclust benchmarks never reached this code.
+
+**Limit (not fixed): parquet only and shell scripts that read `.index`.** All 14 failures of `notext` are of this kind,
+none is a wrong result of a module:
+
+- old linclust workflow (`linclust.sh`: `awk '{print $1}' pre_clust.index`): CLUSTER, EASY_CLUSTER, EASY_NUCL_CLUSTER,
+  CLUSTER_REASSIGN, LINCLUST, LINCLUST_SPLIT, EASY_LINCLUST, LINCLUST_UPDATE
+- `taxpercontig.sh` (`awk` on `orfs_aln.index`): NUCLPROTTAX_SEARCH
+- `searchslicedtargetprofile.sh` (`cp`, `wc -l`, `awk` on the target index): SLICEPROFILE, NOMPI_SLICE_TECH
+- the test script itself reads an index: FILTERDB, FILTERTAXSEQDB, EASYNUCLPROTSEARCH_TAX (this one reports BAD,
+  0 hits counted, because its `awk` on the result index finds no file)
+
+Other workflow scripts with the same pattern, not covered by a failing test: `blastp.sh`, `blastpgp.sh`,
+`cascaded_clustering.sh`, `update_clustering.sh`, `easyproteomecluster.sh`, `pickconsensusrep.sh`. Because of this,
+the code behind these scripts is not tested with parquet only. A general fix would be a small module that prints an
+index as text (keys, or all three columns), used by the scripts in place of reading the file; `createsubdb` already
+takes a DB in place of a key list, but `filterdb --filter-file` in `linclust.sh` needs the list.
 
 ## 7. Options for later
 

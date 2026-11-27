@@ -20,6 +20,8 @@
 //   MMSEQS_WRITE_LAZY_INDEX=parquet,binary               DBWriter::close also writes these files
 //   MMSEQS_WRITE_LAZY_INDEX=parquet,notext               DBWriter::close writes the parquet file INSTEAD of the text
 //                                                        index; DBReader then reads the parquet file in every mode
+//   MMSEQS_LAZY_INDEX_TEXT_MEMORY=1                     test mode: readers register the memory of a text index
+//                                                        (same memory budget and k-mer parts as with the text index)
 //   MMSEQS_INDEX_DEBUG=1                                 DBReader reports each index it opens with a backend
 
 #include "IndexTypes.h"

@@ -17,7 +17,8 @@
 #   <MMseqs2 repo>  checkout of the branch; the helper scripts are taken from <repo>/util/parquet_index
 #                   (sbatch runs a copy of this script, so they cannot be found next to it)
 #   <database>      MMseqs2 sequence DB (made with createdb, with its _h DB) or a FASTA file (.gz allowed);
-#                   a FASTA file is converted with createdb in ${SCRATCH}
+#                   a FASTA file is converted with createdb in ${SCRATCH}. Not used by the steps build and
+#                   regression: with STEPS="build regression" any word (e.g. -) can be given.
 #   ${SCRATCH}      environment variable, must be set: all temporary files go there (build directory, subsets,
 #                   workflow temporary files). Local scratch with space for about four times the largest
 #                   subset plus the build (1 GB); not a network filesystem (random reads through mmap are slow
@@ -34,7 +35,7 @@
 # Run requirements: python3 (>= 3.9), GNU time (/usr/bin/time or TIME_BIN), Linux /proc.
 #
 # Settings (environment variables):
-#   STEPS          steps to run, default "build test lookup cluster steps"
+#   STEPS          steps to run, default "build test regression lookup cluster steps"
 #   THREADS        default SLURM_CPUS_PER_TASK, else all cores. On a node shared with other jobs use fewer threads
 #                  than cores: one busy outside core slowed a 20 thread run on 20 cores by 12 %.
 #   ROUNDS         rounds of every benchmark, default 3
@@ -42,7 +43,11 @@
 #   LOOKUP_SEQS    sequences for the lookup benchmark, 0 = whole database (default)
 #   CLUSTER_SEQS   sizes of the clustering benchmarks, space separated, 0 = whole database; default "20000000".
 #                  Sizes above the database size use the whole database.
-#   STEP_VARIANTS  variants of the per-module benchmark, default "text both notext"
+#   STEP_VARIANTS  variants of the per-module benchmark, default "text both notext". both_textmem and
+#                  notext_textmem are both/notext with MMSEQS_LAZY_INDEX_TEXT_MEMORY=1: the lazy index registers the
+#                  memory of a text index, so kmermatcher plans the same k-mer parts as the text run and the
+#                  clusters can be compared with text also when it works in parts (large DB or low
+#                  --split-memory-limit). Without it such runs give other, equally valid clusters than text.
 #   WORKFLOWS      workflows of the per-module benchmark, default "linclust"
 #   EXTRA_ARGS     extra arguments for the workflows of the per-module benchmark, e.g. "--split-memory-limit 80G"
 #   BUILD_DIR      build directory, default <tmp dir>/build (an existing build is updated)
@@ -55,6 +60,14 @@
 #   test     lazy_index_test.sh (same output with every reader, on the TEST_SEQS subset), test_lazyindex (all
 #            access modes of DBReader, text index against carquet/custom/binary readers and against a DB with a
 #            parquet index only), cluster workflow text against parquet only (same clusters)
+#   regression  the five linclust tests of the MMseqs2 regression suite (<repo>/util/regression, a git submodule:
+#            fetched with "git submodule update --init util/regression" if it is missing, which needs network;
+#            their data is in the suite). Each test runs with the text index, with text + parquet read through
+#            parquet (both) and with parquet only (notext), the last two also with MMSEQS_LAZY_INDEX_TEXT_MEMORY=1.
+#            Checks: the text run gives the cluster count the suite expects; every other run gives exactly the
+#            clusters of the text run (md5 of the sorted representative/member pairs). The three tests of the old
+#            workflow (--linclust-version 1) cannot run with parquet only (the workflow script reads .index files
+#            with awk): reported as SKIP, not as failure. Takes a few minutes.
 #   lookup   lazy_index_bench.sh: index file sizes, open + lookups, createsubdb with random and sorted keys,
 #            convertalis from all threads; readers text, parquet (carquet), parquet (custom decoder), binary
 #   cluster  lazy_index_cluster_bench.sh: linclust end to end with the four readers (first size of CLUSTER_SEQS)
@@ -65,14 +78,14 @@ set -uo pipefail
 
 if [ $# -lt 2 ] || [ -z "${SCRATCH:-}" ]; then
     [ -z "${SCRATCH:-}" ] && echo "SCRATCH is not set: it must name the directory for all temporary files" >&2
-    sed -n '11,25p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '11,26p' "$0" | sed 's/^# \{0,1\}//'
     exit 2
 fi
 REPO="$(readlink -f "$1")"; DB_ARG="$(readlink -f "$2")"; TMP="$SCRATCH"; OUT="${3:-lazy_index_results}"
 mkdir -p "$TMP" "$OUT" || exit 2
 TMP="$(readlink -f "$TMP")"; OUT="$(readlink -f "$OUT")"
 U="$REPO/util/parquet_index"
-STEPS="${STEPS:-build test lookup cluster steps}"
+STEPS="${STEPS:-build test regression lookup cluster steps}"
 THREADS="${THREADS:-${SLURM_CPUS_PER_TASK:-$(nproc)}}"
 ROUNDS="${ROUNDS:-3}"
 TEST_SEQS="${TEST_SEQS:-200000}"
@@ -105,9 +118,9 @@ step() {
     log "step $name: exit $rc, $((SECONDS - t0)) s"
     return "$rc"
 }
-# OK/FAIL lines of a test log ("  OK    name") to tests.csv
+# OK/FAIL/SKIP lines of a test log ("  OK    name") to tests.csv
 collect_checks() {   # group, log
-    awk -v g="$1" '/^  (OK|FAIL)  / { r = $1; sub(/^  (OK|FAIL)  +/, ""); gsub(/"/, "'"'"'"); printf "%s,\"%s\",%s\n", g, $0, r }' "$2" >> "$TESTS"
+    awk -v g="$1" '/^  (OK|FAIL|SKIP)  / { r = $1; sub(/^  (OK|FAIL|SKIP)  +/, ""); gsub(/"/, "'"'"'"); printf "%s,\"%s\",%s\n", g, $0, r }' "$2" >> "$TESTS"
 }
 
 for f in lazy_index_test.sh lazy_index_bench.sh lazy_index_cluster_bench.sh lazy_index_steps_bench.sh mmseqs_steps.py peak_anon.py; do
@@ -192,7 +205,9 @@ copy_db() {
         notext) "$M" convert2parquet "$s.index" "$d.index.parquet" -v 1 ;;
     esac
 }
-if [ -n "$STEPS" ] && [ "$STEPS" != build ]; then
+NEED_DB=0
+for s in $STEPS; do case "$s" in build|regression) ;; *) NEED_DB=1 ;; esac; done
+if [ "$NEED_DB" = 1 ]; then
     prepare_db || { echo "database,1,0" >> "$STATUS"; STEPS=""; }
 fi
 
@@ -239,6 +254,62 @@ if has test; then
             echo "notext_workflow,\"$wf: no result\",FAIL" >> "$TESTS"
         fi
     done
+fi
+
+# ---------------------------------------------------------------- linclust regression tests, text against parquet
+regression() {
+    local RG="$REPO/util/regression" W="$WORK/regression" rc=0 t c cfg vars R L ref md5 n status parts
+    if [ ! -e "$RG/regression/run_linclust.sh" ]; then
+        git -C "$REPO" submodule update --init util/regression
+    fi
+    if [ ! -e "$RG/regression/run_linclust.sh" ] || [ ! -e "$RG/data/clu.fasta" ]; then
+        echo "  FAIL  regression suite not found in $RG (git submodule update --init util/regression)"
+        return 1
+    fi
+    rm -rf "$W"; mkdir -p "$W"
+    for t in linclust linclust2 linclust_split linclust2_split easy_linclust; do
+        ref=""
+        for c in "text|" \
+                 "both|MMSEQS_INDEX_BACKEND=parquet-custom MMSEQS_WRITE_LAZY_INDEX=parquet" \
+                 "both_textmem|MMSEQS_INDEX_BACKEND=parquet-custom MMSEQS_WRITE_LAZY_INDEX=parquet MMSEQS_LAZY_INDEX_TEXT_MEMORY=1" \
+                 "notext|MMSEQS_WRITE_LAZY_INDEX=parquet,notext" \
+                 "notext_textmem|MMSEQS_WRITE_LAZY_INDEX=parquet,notext MMSEQS_LAZY_INDEX_TEXT_MEMORY=1"; do
+            cfg="${c%%|*}"; vars="${c#*|}"; R="$W/$cfg/$t"; L="$LOGS/regression_${cfg}_$t.log"
+            mkdir -p "$R"
+            # shellcheck disable=SC2086
+            env MMSEQS="$M" DATADIR="$RG/data" RESULTS="$R" MMSEQS_NUM_THREADS="$THREADS" MMSEQS_INDEX_DEBUG=1 $vars \
+                sh "$RG/regression/run_$t.sh" > "$L" 2>&1
+            parts="$(grep -h 'Process file into' "$L" | grep -o '[0-9]* parts' | tr '\n' ' ')"
+            parts="${parts:+, kmermatcher: ${parts% }}"
+            if [ ! -s "$R/results_cluster.tsv" ] || [ ! -s "$R.report" ]; then
+                if [ "${cfg#notext}" != "$cfg" ] && grep -q "awk: fatal: cannot open file .*\.index" "$L"; then
+                    echo "  SKIP  $t, $cfg: the workflow script reads a text index with awk, not possible with parquet only"
+                else
+                    echo "  FAIL  $t, $cfg: no result, see $L"; rc=1
+                fi
+                continue
+            fi
+            md5="$(LC_ALL=C sort "$R/results_cluster.tsv" | md5sum | cut -c1-12)"
+            n="$(cut -f1 "$R/results_cluster.tsv" | LC_ALL=C sort -u | wc -l)"
+            status="$(head -n 1 "$R.report")"
+            if [ "$cfg" = text ]; then
+                ref="$md5"
+                if [ "$status" = GOOD ]; then
+                    echo "  OK    $t, text: $n clusters as the suite expects ($md5$parts)"
+                else
+                    echo "  FAIL  $t, text: $n clusters, suite: $(tr '\n' ' ' < "$R.report")($md5$parts)"; rc=1
+                fi
+            elif [ -n "$ref" ] && [ "$md5" = "$ref" ]; then
+                echo "  OK    $t, $cfg: same clusters as text ($n clusters, $md5$parts)"
+            else
+                echo "  FAIL  $t, $cfg: $n clusters, $md5, text has ${ref:-no result}$parts"; rc=1
+            fi
+        done
+    done
+    return "$rc"
+}
+if has regression; then
+    step regression regression; collect_checks regression "$LOGS/regression.log"
 fi
 
 # ---------------------------------------------------------------- benchmarks
@@ -339,15 +410,26 @@ status = read(os.path.join(out, "steps_status.csv"))
 for r in status:
     L.append(f'  {r["step"]:28} exit {r["exit"]:>3}  {r["seconds"]:>7} s')
 tests = [r for r in rows if r[0] == "test"]
-failed = [r for r in tests if r[7] != "OK"]
+skipped = [r for r in tests if r[7] == "SKIP"]
+failed = [r for r in tests if r[7] not in ("OK", "SKIP")]
 L.append("")
-L.append(f"Correctness: {len(tests) - len(failed)} of {len(tests)} checks passed")
+L.append(f"Correctness: {len(tests) - len(failed) - len(skipped)} of {len(tests) - len(skipped)} checks passed"
+         + (f", {len(skipped)} not possible (SKIP)" if skipped else "") if tests else "Correctness: no checks were run (steps test and regression not selected)")
 for g in dict.fromkeys(r[2] for r in tests):
     x = [r for r in tests if r[2] == g]
-    L.append(f'  {g:18} {sum(r[7] == "OK" for r in x)} OK, {sum(r[7] != "OK" for r in x)} failed')
+    L.append(f'  {g:18} {sum(r[7] == "OK" for r in x)} OK, {sum(r[7] not in ("OK", "SKIP") for r in x)} failed'
+             + (f', {sum(r[7] == "SKIP" for r in x)} skipped' if any(r[7] == "SKIP" for r in x) else ""))
 for r in failed:
     L.append(f"  FAIL  {r[2]}: {r[6]}")
-# median over the rounds per (suite, dataset, benchmark, module), one column per variant, ratio to the first variant
+for r in skipped:
+    L.append(f"  SKIP  {r[2]}: {r[6]}")
+for r in tests:
+    if r[2] == "regression" and r[7] == "OK":
+        L.append(f"  OK    {r[6]}")
+# one line per (suite, dataset, benchmark, module), one column per variant, ratio to the first variant.
+# Times: median over the rounds. Memory: every run already reports its peak (highest value during the run); over
+# the rounds the highest peak is shown, because the question is what has to fit into RAM.
+PEAK = ("anon_mb", "peak_rss_mb")
 def table(suite, metrics, title):
     sel = [r for r in rows if r[0] == suite and r[6] in metrics and num(r[7]) is not None]
     if not sel:
@@ -363,12 +445,12 @@ def table(suite, metrics, title):
             keys = list(dict.fromkeys((r[2], r[5]) for r in grp if r[6] == metric))
             if not keys:
                 continue
-            L.append(f'    {metric + " (median)":34}' + "".join(f"{v:>22}" for v in variants) + f"   x {variants[0]}")
+            L.append(f'    {metric + (" (peak, max of rounds)" if metric in PEAK else " (median)"):34}' + "".join(f"{v:>22}" for v in variants) + f"   x {variants[0]}")
             for b, mod in keys:
                 med = []
                 for v in variants:
                     x = [num(r[7]) for r in grp if r[6] == metric and r[2] == b and r[5] == mod and r[3] == v]
-                    med.append(st.median(x) if x else None)
+                    med.append((max(x) if metric in PEAK else st.median(x)) if x else None)
                 name = b if suite == "lookup" else mod
                 line = f"    {name:34}" + "".join(f"{m:22.2f}" if m is not None else f'{"-":>22}' for m in med)
                 if med[0]:
@@ -376,13 +458,37 @@ def table(suite, metrics, title):
                 L.append(line)
 table("lookup", ["wall_s", "anon_mb"], "Lookup benchmark (one process per workload)")
 table("cluster", ["wall_s", "cpu_s", "anon_mb", "big_text_opens"], "Clustering workflow, four readers")
-table("steps", ["wall_s", "cpu_s", "anon_mb"], "Workflow per module (workflow = whole run; anon_mb = peak allocated memory)")
+table("steps", ["wall_s", "cpu_s", "anon_mb"], "Workflow per module (workflow = whole run; anon_mb = peak allocated memory, sampled every 50 ms)")
+# peak memory of the whole run and where a variant saves memory
+peaks = [r for r in rows if r[0] == "steps" and r[6] == "anon_mb" and num(r[7]) is not None]
+for ds, b in dict.fromkeys((r[1], r[2]) for r in peaks):
+    grp = [r for r in peaks if r[1] == ds and r[2] == b]
+    variants = list(dict.fromkeys(r[3] for r in grp))
+    def peak(v, mod):
+        x = [num(r[7]) for r in grp if r[3] == v and r[5] == mod]
+        return max(x) if x else None
+    mods = [m for m in dict.fromkeys(r[5] for r in grp) if m not in ("workflow", b)]
+    L.append("")
+    L.append(f"Peak allocated memory, {b}, {ds} sequences (highest value of all rounds)")
+    for v in variants:
+        top = max(((peak(v, m), m) for m in mods if peak(v, m) is not None), default=(None, "-"))
+        line = f"  {v:20} {peak(v, 'workflow'):10.0f} MB, reached in {top[1]}"
+        if v != variants[0] and peak(variants[0], "workflow"):
+            d = peak(v, "workflow") - peak(variants[0], "workflow")
+            line += f"; {d:+.0f} MB ({100 * d / peak(variants[0], 'workflow'):+.1f} %) against {variants[0]}"
+            best = min(((peak(v, m) - peak(variants[0], m), m) for m in mods if peak(v, m) is not None and peak(variants[0], m) is not None), default=None)
+            if best:
+                line += f"; largest change in one module: {best[0]:+.0f} MB in {best[1]}"
+        L.append(line)
+differ = []
 for suite in ("cluster", "steps"):
     res = [r for r in rows if r[0] == suite and r[6] == "result"]
     for ds, b in dict.fromkeys((r[1], r[2]) for r in res):
         x = [r for r in res if r[1] == ds and r[2] == b]
         kinds = sorted(set(r[7] for r in x))
         L.append("")
+        if not (len(kinds) == 1 and "failed" not in kinds[0]):
+            differ.append(f"{suite} {b} {ds}")
         L.append(f'{suite}, {b}, {ds} sequences: ' + ("all runs gave the same clusters" if len(kinds) == 1 and "failed" not in kinds[0]
                  else "DIFFERENT results: " + ", ".join(f'{r[3]} round {r[4]}: {r[7]}' for r in x)))
         other = [num(r[7]) for r in rows if r[0] == suite and r[1] == ds and r[2] == b and r[6] == "other_cores" and num(r[7]) is not None]
@@ -390,13 +496,15 @@ for suite in ("cluster", "steps"):
             L.append(f"  CPU used by other processes during the runs: at most {max(other):.1f} cores" + ("  <- disturbed" if max(other) > 1 else ""))
 bad = [r for r in status if r["exit"] != "0"]
 L.append("")
-L.append("RESULT: " + ("all steps ran, all checks passed" if not bad and not failed else
-                       f'{len(bad)} steps with errors ({", ".join(r["step"] for r in bad)}), {len(failed)} failed checks'))
+L.append("RESULT: " + ("all steps ran, " + ("all checks passed" if tests else "no checks run") + ", all runs of a benchmark gave the same clusters"
+                       if not bad and not failed and not differ else
+                       f'{len(bad)} steps with errors ({", ".join(r["step"] for r in bad)}), {len(failed)} failed checks, '
+                       f'{len(differ)} benchmarks with different clusterings between runs ({", ".join(differ)})'))
 L.append(f"All values: {os.path.join(out, 'lazy_index_results.csv')} (suite, dataset_sequences, benchmark, variant, round, module, metric, value)")
 L.append(f"Logs of the steps with their own tables: {os.path.join(out, 'logs')}")
 open(os.path.join(out, "lazy_index_summary.txt"), "w").write("\n".join(L) + "\n")
 print("\n".join(L))
-sys.exit(1 if bad or failed else 0)
+sys.exit(1 if bad or failed or differ else 0)
 PY
 RC=$?
 if [ "$CLEAN" = 1 ] && [ -d "$WORK" ]; then

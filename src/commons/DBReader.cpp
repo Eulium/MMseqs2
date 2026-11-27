@@ -246,6 +246,17 @@ template <typename T> bool DBReader<T>::open(int accessType){
     return isSortedById;
 }
 
+namespace {
+// MMSEQS_LAZY_INDEX_TEXT_MEMORY (test mode): a reader with a lazy index registers the memory of the text index it
+// replaces with the MemoryTracker (sizeof(Index) per entry, as readIndex does) instead of what it holds.
+// Modules that plan their memory with Util::computeMemory (kmermatcher: size of the k-mer parts) then get the same
+// budget, and with it the same result, as with the text index.
+bool lazyCountsAsText() {
+    static const bool value = getenv("MMSEQS_LAZY_INDEX_TEXT_MEMORY") != NULL;
+    return value;
+}
+}
+
 // Index on disk instead of in memory (LazyIndex.h): if MMSEQS_INDEX_BACKEND names a backend, its file exists next to
 // the text index and fits it. Only for the access modes whose ids are the key order; the other modes sort all
 // entries and read the text index as before.
@@ -290,6 +301,9 @@ bool DBReader<DBKeyType>::openLazyIndex() {
     lastKey = meta.lastKey;
     maxSeqLen = meta.maxSeqLen;
     sortedByOffset = meta.sortedByOffset;
+    if (lazyCountsAsText()) {
+        incrementMemory(sizeof(Index) * size);
+    }
     // the other modes: the entries stay on disk in key order, only the permutation is kept in memory
     sortLazyIndex();
     return true;
@@ -326,7 +340,9 @@ void DBReader<DBKeyType>::sortLazyIndex() {
     }
     id2local = new DBLocalId[size];
     local2id = new DBLocalId[size];
-    incrementMemory(sizeof(DBLocalId) * 2 * size);
+    if (lazyCountsAsText() == false) {
+        incrementMemory(sizeof(DBLocalId) * 2 * size);
+    }
     for (size_t i = 0; i < size; i++) {
         local2id[i] = i;
     }
@@ -445,13 +461,23 @@ void DBReader<T>::materializeIndex() {
     if (lazyIndex == NULL) {
         return;
     }
-    index = new(std::nothrow) Index[size];
-    Util::checkAllocation(index, "Cannot allocate index memory in DBReader");
-    incrementMemory(sizeof(Index) * size);
-    // Index of DBReader<DBKeyType> and LazyIndex::Entry have the same members (a lazy index has DBKeyType keys)
-    lazyIndex->readAll(reinterpret_cast<LazyIndex::Entry*>(index));
-    delete lazyIndex;
-    lazyIndex = NULL;
+    // callers such as decomposeDomainByAminoAcid are used inside parallel regions (splitsequence, extractorfs,
+    // extractframes): only one thread may replace the lazy index, the others wait and find it done
+#pragma omp critical(DBReaderMaterializeIndex)
+    {
+        if (lazyIndex != NULL) {
+            Index *full = new(std::nothrow) Index[size];
+            Util::checkAllocation(full, "Cannot allocate index memory in DBReader");
+            if (lazyCountsAsText() == false) {
+                incrementMemory(sizeof(Index) * size);
+            }
+            // Index of DBReader<DBKeyType> and LazyIndex::Entry have the same members (a lazy index has DBKeyType keys)
+            lazyIndex->readAll(reinterpret_cast<LazyIndex::Entry*>(full));
+            index = full;
+            delete lazyIndex;
+            lazyIndex = NULL;
+        }
+    }
 }
 
 template<typename T>
@@ -556,6 +582,9 @@ template <typename T> void DBReader<T>::close(){
     if (lazyIndex != NULL) {
         delete lazyIndex;
         lazyIndex = NULL;
+        if (lazyCountsAsText()) {
+            decrementMemory(size*sizeof(Index));
+        }
     }
     if(externalData == false && index != NULL) {
         delete[] index;
